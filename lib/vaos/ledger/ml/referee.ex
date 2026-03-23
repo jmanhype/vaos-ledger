@@ -13,7 +13,7 @@ defmodule Vaos.Ledger.ML.Referee do
   require Logger
 
   defstruct [:step_budget, :trials, :killed, :crash_learner_pid,
-             :early_stop_patience, :early_stop_threshold]
+             :early_stop_patience, :early_stop_threshold, :checkpoint_store]
 
   # Client API
 
@@ -68,7 +68,8 @@ defmodule Vaos.Ledger.ML.Referee do
       killed: MapSet.new(),
       crash_learner_pid: crash_learner_pid,
       early_stop_patience: early_stop_patience,
-      early_stop_threshold: early_stop_threshold
+      early_stop_threshold: early_stop_threshold,
+      checkpoint_store: %{}
     }}
   end
 
@@ -160,7 +161,8 @@ defmodule Vaos.Ledger.ML.Referee do
     Logger.info("Trial completed: #{vid}")
     new_state = %{state |
       trials: Map.delete(state.trials, vid),
-      killed: MapSet.delete(state.killed, vid)
+      killed: MapSet.delete(state.killed, vid),
+      checkpoint_store: Map.delete(state.checkpoint_store, vid)
     }
     {:noreply, new_state}
   end
@@ -198,7 +200,8 @@ defmodule Vaos.Ledger.ML.Referee do
 
     new_state = %{state |
       trials: Map.delete(state.trials, vid),
-      killed: MapSet.delete(state.killed, vid)
+      killed: MapSet.delete(state.killed, vid),
+      checkpoint_store: Map.delete(state.checkpoint_store, vid)
     }
     {:noreply, new_state}
   end
@@ -217,6 +220,7 @@ defmodule Vaos.Ledger.ML.Referee do
       stale_steps: 0, last_best: -1.0, config: %{}
     })
     points = [{step, loss} | Enum.take(trial.points, 99)]
+    checkpoint = div(state.step_budget, 2)
     new_score = 1.0 - loss
     best_score = max(trial.best_score, new_score)
 
@@ -237,7 +241,15 @@ defmodule Vaos.Ledger.ML.Referee do
       config: Map.get(trial, :config, %{})
     }
 
-    %{state | trials: Map.put(state.trials, vid, updated_trial)}
+    # Save checkpoint steps in separate store so ring buffer eviction cannot lose them
+    checkpoint_store =
+      if step == checkpoint do
+        Map.put(state.checkpoint_store, vid, {step, loss})
+      else
+        state.checkpoint_store
+      end
+
+    %{state | trials: Map.put(state.trials, vid, updated_trial), checkpoint_store: checkpoint_store}
   end
 
   defp check_early_stop(state, vid) do
@@ -274,7 +286,7 @@ defmodule Vaos.Ledger.ML.Referee do
     if length(at_checkpoint) >= 2 do
       sorted =
         at_checkpoint
-        |> Enum.map(fn {vid, trial} -> {vid, checkpoint_score(trial, checkpoint)} end)
+        |> Enum.map(fn {vid, trial} -> {vid, checkpoint_score(trial, checkpoint, state.checkpoint_store, vid)} end)
         |> Enum.sort_by(fn {_vid, score} -> score end, :asc)
 
       case sorted do
@@ -292,14 +304,24 @@ defmodule Vaos.Ledger.ML.Referee do
     end
   end
 
-  defp checkpoint_score(trial, checkpoint) do
-    case Enum.find(trial.points, fn {step, _loss} -> step == checkpoint end) do
+  defp checkpoint_score(trial, checkpoint, checkpoint_store, vid) do
+    # First check the dedicated checkpoint store (not subject to ring buffer eviction)
+    stored = if vid, do: Map.get(checkpoint_store, vid), else: nil
+
+    case stored do
+      {_step, loss} ->
+        1.0 - loss
+
       nil ->
-        case trial.points do
-          [{_step, loss} | _] -> 1.0 - loss
-          _ -> trial.best_score
+        # Fall back to searching the ring buffer
+        case Enum.find(trial.points, fn {step, _loss} -> step == checkpoint end) do
+          nil ->
+            case trial.points do
+              [{_step, loss} | _] -> 1.0 - loss
+              _ -> trial.best_score
+            end
+          {_step, loss} -> 1.0 - loss
         end
-      {_step, loss} -> 1.0 - loss
     end
   end
 

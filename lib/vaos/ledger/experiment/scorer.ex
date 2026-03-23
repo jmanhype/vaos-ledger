@@ -4,6 +4,8 @@ defmodule Vaos.Ledger.Experiment.Scorer do
   Provides quality assessment without expensive re-running.
   """
 
+  require Logger
+
   alias Vaos.Ledger.Epistemic.Models
 
   @type score_option :: {:fast, boolean()} | {:use_cache, boolean()} | {:llm_fn, (String.t() -> {:ok, String.t()} | {:error, term()})}
@@ -28,12 +30,17 @@ defmodule Vaos.Ledger.Experiment.Scorer do
     use_cache = Keyword.get(opts, :use_cache, true)
 
     if fast and use_cache do
+      init_cache()
       cache_key = cache_key(result)
 
-      with {:ok, score} <- get_from_cache(cache_key) do
-        {:cached, score}
-      else
-        _ -> {:computed, compute_score(result, opts)}
+      case get_from_cache(cache_key) do
+        {:ok, score} ->
+          {:cached, score}
+
+        :miss ->
+          score = compute_score(result, opts)
+          put_in_cache(cache_key, score)
+          {:computed, score}
       end
     else
       {:computed, compute_score(result, opts)}
@@ -173,12 +180,19 @@ defmodule Vaos.Ledger.Experiment.Scorer do
 
     case llm_fn.(prompt) do
       {:ok, response} ->
-        case Float.parse(String.trim(response)) do
-          {score, _} -> Vaos.Ledger.Epistemic.Models.clamp(score)
-          :error -> estimate_score(execution_record, eval_runs)
+        trimmed = String.trim(response)
+
+        case Float.parse(trimmed) do
+          {score, _} ->
+            Vaos.Ledger.Epistemic.Models.clamp(score)
+
+          :error ->
+            Logger.warning("LLM score response did not start with a number: " <> inspect(String.slice(trimmed, 0, 100)))
+            estimate_score(execution_record, eval_runs)
         end
 
-      {:error, _} ->
+      {:error, reason} ->
+        Logger.warning("LLM scoring call failed: " <> inspect(reason))
         estimate_score(execution_record, eval_runs)
     end
   end
@@ -194,8 +208,31 @@ defmodule Vaos.Ledger.Experiment.Scorer do
     "score:#{hash}"
   end
 
-  defp get_from_cache(_key) do
-    # In a real implementation, use ETS or another cache backend.
-    :miss
+  defp init_cache do
+    if :ets.whereis(:scorer_cache) == :undefined do
+      :ets.new(:scorer_cache, [:set, :public, :named_table])
+    end
+
+    :ok
+  end
+
+  defp get_from_cache(key) do
+    case :ets.whereis(:scorer_cache) do
+      :undefined ->
+        :miss
+
+      _table ->
+        case :ets.lookup(:scorer_cache, key) do
+          [{^key, score}] -> {:ok, score}
+          [] -> :miss
+        end
+    end
+  end
+
+  defp put_in_cache(key, score) do
+    case :ets.whereis(:scorer_cache) do
+      :undefined -> :ok
+      _table -> :ets.insert(:scorer_cache, {key, score})
+    end
   end
 end

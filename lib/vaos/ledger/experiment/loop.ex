@@ -17,7 +17,7 @@ defmodule Vaos.Ledger.Experiment.Loop do
   alias Vaos.Ledger.Epistemic.{Controller, Ledger}
   alias Vaos.Ledger.Experiment.{Scorer, Strategy, Verdict}
 
-  defstruct [:ledger, :best_score, :iteration, :max_iterations, :threshold]
+  defstruct [:ledger, :best_score, :iteration, :max_iterations, :threshold, :experiment_fn]
 
   # Client API
 
@@ -62,7 +62,8 @@ defmodule Vaos.Ledger.Experiment.Loop do
       best_score: 0.0,
       iteration: 0,
       max_iterations: Keyword.get(opts, :max_iterations, 100),
-      threshold: Keyword.get(opts, :threshold, 0.2)
+      threshold: Keyword.get(opts, :threshold, 0.2),
+      experiment_fn: Keyword.get(opts, :experiment_fn)
     }}
   end
 
@@ -136,7 +137,7 @@ defmodule Vaos.Ledger.Experiment.Loop do
       %{state | iteration: iteration}
     else
       # 4. Execute the action
-      execution = execute_action(proposal, state.ledger)
+      execution = execute_action(proposal, state.ledger, state.experiment_fn)
 
       # 5. Score the result
       score = score_execution(execution, state.ledger)
@@ -157,16 +158,37 @@ defmodule Vaos.Ledger.Experiment.Loop do
     end
   end
 
-  defp execute_action(proposal, _ledger) do
+  defp execute_action(proposal, _ledger, experiment_fn) do
+    {status, notes, runtime} =
+      if experiment_fn do
+        try do
+          case experiment_fn.(proposal) do
+            {:ok, result} when is_map(result) ->
+              {:succeeded, inspect(result), Map.get(result, :runtime_seconds, 1.0)}
+            {:ok, result} ->
+              {:succeeded, inspect(result), 1.0}
+            {:error, reason} ->
+              {:failed, "Experiment failed: " <> inspect(reason), 0.0}
+          end
+        rescue
+          e ->
+            Logger.error("Experiment function crashed: " <> Exception.message(e))
+            {:failed, "Experiment crashed: " <> Exception.message(e), 0.0}
+        end
+      else
+        Logger.warning("No experiment_fn provided; using stub execution for claim " <> proposal.claim_id)
+        {:succeeded, "Executed in experiment loop (stub)", 1.0}
+      end
+
     case Ledger.record_execution(
       claim_id: proposal.claim_id,
       claim_title: proposal.claim_title,
       action_type: proposal.action_type,
       executor: :manual,
-      status: :succeeded,
+      status: status,
       mode: proposal.mode || "experiment",
-      notes: "Executed in experiment loop",
-      runtime_seconds: 1.0,
+      notes: notes,
+      runtime_seconds: runtime,
       cost_estimate_usd: 0.01
     ) do
       {:error, reason} ->

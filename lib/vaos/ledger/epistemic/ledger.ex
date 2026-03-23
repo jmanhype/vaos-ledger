@@ -1427,26 +1427,38 @@ defmodule Vaos.Ledger.Epistemic.Ledger do
   def handle_call({:record_execution, attrs}, _from, state) do
     decision_id = Keyword.get(attrs, :decision_id, "")
 
-    {claim_id, claim_title, action_type, executor, mode} =
+    result =
       if decision_id != "" do
-        {:ok, decision} = fetch_decision(state, decision_id)
+        case fetch_decision(state, decision_id) do
+          {:ok, decision} ->
+            {:ok,
+              {
+                Keyword.get(attrs, :claim_id, decision.claim_id),
+                Keyword.get(attrs, :claim_title, decision.claim_title),
+                Keyword.get(attrs, :action_type, decision.action_type),
+                Keyword.get(attrs, :executor, decision.executor),
+                Keyword.get(attrs, :mode, decision.mode)
+              }}
 
-        {
-          Keyword.get(attrs, :claim_id, decision.claim_id),
-          Keyword.get(attrs, :claim_title, decision.claim_title),
-          Keyword.get(attrs, :action_type, decision.action_type),
-          Keyword.get(attrs, :executor, decision.executor),
-          Keyword.get(attrs, :mode, decision.mode)
-        }
+          {:error, :not_found} ->
+            {:error, :decision_not_found}
+        end
       else
-        {
-          Keyword.fetch!(attrs, :claim_id),
-          Keyword.get(attrs, :claim_title, ""),
-          Keyword.fetch!(attrs, :action_type),
-          Keyword.get(attrs, :executor, :manual),
-          Keyword.get(attrs, :mode, "")
-        }
+        {:ok,
+          {
+            Keyword.fetch!(attrs, :claim_id),
+            Keyword.get(attrs, :claim_title, ""),
+            Keyword.fetch!(attrs, :action_type),
+            Keyword.get(attrs, :executor, :manual),
+            Keyword.get(attrs, :mode, "")
+          }}
       end
+
+    case result do
+      {:error, reason} ->
+        {:reply, {:error, reason}, state}
+
+      {:ok, {claim_id, claim_title, action_type, executor, mode}} ->
 
     case fetch_claim(state, claim_id) do
       {:ok, _claim} ->
@@ -1496,6 +1508,7 @@ defmodule Vaos.Ledger.Epistemic.Ledger do
 
       {:error, _} = error ->
         {:reply, error, state}
+    end
     end
   end
 
@@ -2186,10 +2199,18 @@ defmodule Vaos.Ledger.Epistemic.Ledger do
           claim.status
         end
 
+      # Simple beta-distribution-inspired Bayesian update
+      # Prior gets less weight as more evidence accumulates
+      prior = claim.confidence || 0.5
+      evidence_ratio = metrics["belief"]
+      evidence_count = metrics["evidence_count"] || 0
+      prior_weight = 1.0 / (1.0 + evidence_count)
+      posterior = prior_weight * prior + (1.0 - prior_weight) * evidence_ratio
+
       updated_claim =
         claim
         |> Map.put(:status, updated_status)
-        |> Map.put(:confidence, metrics["belief"])
+        |> Map.put(:confidence, Models.clamp(posterior))
         |> Map.put(:updated_at, Models.utc_now())
 
       %{state | claims: Map.put(state.claims, claim_id, updated_claim)}

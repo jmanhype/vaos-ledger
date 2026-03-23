@@ -36,6 +36,10 @@ defmodule Vaos.Ledger.Experiment.Verdict do
       iteration >= max_iterations ->
         :converged
 
+      # When baseline is 0, use absolute difference threshold instead
+      baseline_score == 0.0 ->
+        if abs(best_score - prev_best_score) < 0.01, do: :converged, else: :continue
+
       not meets_threshold?(best_score, baseline_score, threshold) ->
         :plateau
 

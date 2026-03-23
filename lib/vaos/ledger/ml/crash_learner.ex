@@ -147,22 +147,29 @@ defmodule Vaos.Ledger.ML.CrashLearner do
     end
   end
 
-  defp merge_pitfalls(existing, new) do
+  defp merge_pitfalls(existing, new_pitfalls) do
+    # Merge by keeping the one with higher count (preserves both counts correctly)
     existing_map = Map.new(existing, fn p -> {p.pattern, p} end)
 
-    Enum.reduce(new, existing_map, fn pitfall, acc ->
-      case Map.get(acc, pitfall.pattern) do
-        nil ->
-          Map.put(acc, pitfall.pattern, pitfall)
+    merged =
+      Enum.reduce(new_pitfalls, existing_map, fn new_p, acc ->
+        case Map.get(acc, new_p.pattern) do
+          nil ->
+            Map.put(acc, new_p.pattern, new_p)
 
-        existing_pitfall ->
-          Map.put(acc, pitfall.pattern, %{
-            existing_pitfall
-            | count: max(existing_pitfall.count, pitfall.count),
-              summary: pitfall.summary
-          })
-      end
-    end)
-    |> Map.values()
+          old ->
+            # Keep the entry with the higher count; on tie, prefer the newer summary
+            merged_entry =
+              if old.count >= new_p.count do
+                %{old | count: old.count}
+              else
+                %{new_p | count: new_p.count}
+              end
+
+            Map.put(acc, new_p.pattern, merged_entry)
+        end
+      end)
+
+    Map.values(merged)
   end
 end

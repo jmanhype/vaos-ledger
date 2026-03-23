@@ -137,14 +137,106 @@ defmodule Vaos.Ledger.Experiment.Strategy do
   defp parse_strategy(path) do
     content = File.read!(path)
 
-    # Attempt to extract a name from the first "## Strategy: <name>" heading.
+    # Extract name
     name =
       case Regex.run(~r/## Strategy:\s+(.+)/, content) do
         [_, captured] -> String.trim(captured)
         _ -> @default_strategy.name
       end
 
-    {:ok, %{@default_strategy | name: name}}
+    # Extract description (line after the strategy heading, before ### Goals)
+    description =
+      case Regex.run(~r/## Strategy:.+\n\n(.+?)(?:\n\n###|\z)/s, content) do
+        [_, captured] -> String.trim(captured)
+        _ -> @default_strategy.description
+      end
+
+    # Extract goals (bullet list under ### Goals)
+    goals =
+      case Regex.run(~r/### Goals\n((?:- .+\n?)+)/, content) do
+        [_, captured] -> parse_bullet_list(captured)
+        _ -> @default_strategy.goals
+      end
+
+    # Extract constraints (bullet list under ### Constraints)
+    constraints =
+      case Regex.run(~r/### Constraints\n((?:- .+\n?)+)/, content) do
+        [_, captured] -> parse_bullet_list(captured)
+        _ -> @default_strategy.constraints
+      end
+
+    # Extract hyperparameters (bullet list under ### Hyperparameters)
+    hyperparameters =
+      case Regex.run(~r/### Hyperparameters\n((?:- .+\n?)+)/, content) do
+        [_, captured] -> parse_hyperparameter_list(captured)
+        _ -> @default_strategy.hyperparameters
+      end
+
+    # Extract evolution history
+    evolution_history =
+      case Regex.run(~r/### Evolution History\n([\s\S]*)/, content) do
+        [_, captured] ->
+          if String.contains?(captured, "No evolutions yet.") do
+            []
+          else
+            parse_evolution_entries(captured)
+          end
+        _ -> @default_strategy.evolution_history
+      end
+
+    {:ok, %{
+      name: name,
+      description: description,
+      goals: goals,
+      constraints: constraints,
+      hyperparameters: hyperparameters,
+      evolution_history: evolution_history
+    }}
+  end
+
+  defp parse_bullet_list(text) do
+    text
+    |> String.split("\n", trim: true)
+    |> Enum.map(fn line -> String.replace(line, ~r/^- /, "") |> String.trim() end)
+    |> Enum.reject(&(&1 == ""))
+  end
+
+  defp parse_hyperparameter_list(text) do
+    text
+    |> String.split("\n", trim: true)
+    |> Enum.reduce(%{}, fn line, acc ->
+      case Regex.run(~r/^- (.+?):\s+(.+)$/, String.trim(line)) do
+        [_, key, value] ->
+          parsed_value =
+            case Float.parse(value) do
+              {f, ""} -> f
+              _ ->
+                case Integer.parse(value) do
+                  {i, ""} -> i
+                  _ ->
+                    case value do
+                      "true" -> true
+                      "false" -> false
+                      other -> other
+                    end
+                end
+            end
+          Map.put(acc, key, parsed_value)
+        _ -> acc
+      end
+    end)
+  end
+
+  defp parse_evolution_entries(text) do
+    Regex.scan(~r/- (.+?) \(best: (.+?)\)/, text)
+    |> Enum.map(fn [_, timestamp, score] ->
+      {score_val, _} = Float.parse(score)
+      %{
+        timestamp: String.trim(timestamp),
+        best_score: score_val,
+        changes: %{}
+      }
+    end)
   end
 
   defp format_strategy(strategy) do
