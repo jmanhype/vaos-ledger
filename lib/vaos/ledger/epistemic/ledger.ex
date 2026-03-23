@@ -24,6 +24,13 @@ defmodule Vaos.Ledger.Epistemic.Ledger do
   end
 
   @doc """
+  Stop the ledger server.
+  """
+  def stop do
+    GenServer.stop(__MODULE__)
+  end
+
+  @doc """
   Get the ledger state (for testing/debugging).
   """
   def state do
