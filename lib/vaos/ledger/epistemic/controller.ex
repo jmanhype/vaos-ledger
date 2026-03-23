@@ -11,6 +11,7 @@ defmodule Vaos.Ledger.Epistemic.Controller do
   @doc """
   Decide on the next research action.
   """
+  @spec decide(GenServer.server(), list(option())) :: Vaos.Ledger.Epistemic.Models.ControllerDecision.t()
   def decide(ledger, opts \\ []) do
     backlog_limit = Keyword.get(opts, :backlog_limit, 5)
     mode_hint = Keyword.get(opts, :mode_hint, "")

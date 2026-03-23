@@ -525,4 +525,113 @@ defmodule Vaos.Ledger.Epistemic.LedgerTest do
       assert length(Ledger.list_protocols()) == 1
     end
   end
+
+  describe "error paths — nonexistent IDs" do
+    test "add_attack returns error for nonexistent claim" do
+      result = Ledger.add_attack(claim_id: "bad", description: "D")
+      assert result == {:error, :not_found}
+    end
+
+    test "add_artifact returns error for nonexistent claim" do
+      result = Ledger.add_artifact(claim_id: "bad", kind: :method, title: "T")
+      assert result == {:error, :not_found}
+    end
+
+    test "register_target returns error for nonexistent claim" do
+      result = Ledger.register_target(
+        claim_id: "bad", mode: "opt", target_type: "code", title: "T"
+      )
+      assert result == {:error, :not_found}
+    end
+
+    test "register_eval_suite returns error for nonexistent claim" do
+      result = Ledger.register_eval_suite(
+        claim_id: "bad", target_id: "bad2",
+        name: "S", compatible_target_type: "code"
+      )
+      assert result == {:error, :not_found}
+    end
+
+    test "register_eval_suite returns error for nonexistent target" do
+      claim = Ledger.add_claim(title: "T", statement: "S")
+      result = Ledger.register_eval_suite(
+        claim_id: claim.id, target_id: "bad2",
+        name: "S", compatible_target_type: "code"
+      )
+      assert result == {:error, :not_found}
+    end
+
+    test "add_mutation_candidate returns error for nonexistent claim" do
+      result = Ledger.add_mutation_candidate(
+        claim_id: "bad", target_id: "bad2",
+        summary: "M", content: "C"
+      )
+      assert result == {:error, :not_found}
+    end
+
+    test "add_mutation_candidate returns error for nonexistent target" do
+      claim = Ledger.add_claim(title: "T", statement: "S")
+      result = Ledger.add_mutation_candidate(
+        claim_id: claim.id, target_id: "bad2",
+        summary: "M", content: "C"
+      )
+      assert result == {:error, :not_found}
+    end
+
+    test "record_eval_run returns error for nonexistent claim" do
+      result = Ledger.record_eval_run(
+        claim_id: "bad", target_id: "bad2",
+        suite_id: "bad3", candidate_id: "bad4",
+        case_id: "c1", run_index: 1, score: 0.5, passed: true
+      )
+      assert result == {:error, :not_found}
+    end
+
+    test "promote_candidate returns error for nonexistent target" do
+      claim = Ledger.add_claim(title: "T", statement: "S")
+      target = Ledger.register_target(
+        claim_id: claim.id, mode: "opt", target_type: "code", title: "T"
+      )
+      result = Ledger.promote_candidate(target.id, "bad_candidate")
+      assert result == {:error, :not_found}
+    end
+
+    test "record_execution returns error for nonexistent claim_id" do
+      result = Ledger.record_execution(
+        claim_id: "bad_claim", action_type: :run_experiment,
+        status: :succeeded
+      )
+      assert result == {:error, :not_found}
+    end
+
+    test "get_input returns error for nonexistent input" do
+      assert {:error, :not_found} = Ledger.get_input("nonexistent")
+    end
+
+    test "get_hypothesis returns error for nonexistent hypothesis" do
+      assert {:error, :not_found} = Ledger.get_hypothesis("nonexistent")
+    end
+
+    test "get_target returns error for nonexistent target" do
+      assert {:error, :not_found} = Ledger.get_target("nonexistent")
+    end
+
+    test "get_eval_suite returns error for nonexistent suite" do
+      assert {:error, :not_found} = Ledger.get_eval_suite("nonexistent")
+    end
+
+    test "get_mutation_candidate returns error for nonexistent candidate" do
+      assert {:error, :not_found} = Ledger.get_mutation_candidate("nonexistent")
+    end
+
+    test "link_hypothesis_to_claim returns error for nonexistent hypothesis" do
+      claim = Ledger.add_claim(title: "T", statement: "S")
+      assert {:error, :not_found} = Ledger.link_hypothesis_to_claim("bad_hyp", claim.id)
+    end
+
+    test "link_input_to_claim returns error for nonexistent input" do
+      claim = Ledger.add_claim(title: "T", statement: "S")
+      assert {:error, :not_found} = Ledger.link_input_to_claim("bad_input", claim.id)
+    end
+  end
 end

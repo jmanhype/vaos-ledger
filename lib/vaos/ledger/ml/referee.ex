@@ -4,24 +4,51 @@ defmodule Vaos.Ledger.ML.Referee do
   Subscribes to trial events and compares progress.
 
   Port of ex_autoresearch Agent.Referee.
+
+  In a real deployment the Referee would subscribe to a PubSub topic such as
+  `"agent:events"` and receive `{:trial_started, _}`, `{:step, _}`, etc.
+  messages from worker processes.  In the current implementation the caller
+  sends those messages directly (`send(Referee, …)`), which is the interface
+  exercised by the tests.
+
+  Kill logic: whenever a step update arrives, `maybe_kill_loser/1` inspects
+  all trials that have reached `div(step_budget, 2)` steps.  If the worst
+  performer is more than 20 % below the best performer it is marked as killed
+  in the `:killed` MapSet (and, in a real system, a kill signal would be sent
+  to the trial worker).
   """
 
   use GenServer
   require Logger
 
-
   defstruct [:step_budget, :trials, :killed]
 
   # Client API
 
+  @doc """
+  Start the Referee GenServer.
+
+  ## Required options
+    * `:step_budget` — total step budget; halfway point is used as the kill
+      checkpoint.
+  """
+  @spec start_link(keyword()) :: GenServer.on_start()
   def start_link(opts) do
     GenServer.start_link(__MODULE__, opts, name: __MODULE__)
   end
 
+  @doc """
+  Return a summary status map: step_budget, trial_count, killed_count.
+  """
+  @spec get_status() :: {:ok, map()}
   def get_status do
     GenServer.call(__MODULE__, :get_status)
   end
 
+  @doc """
+  Return per-trial stats: version_id, current_step, best_score, status, killed.
+  """
+  @spec get_trial_stats() :: {:ok, list(map())}
   def get_trial_stats do
     GenServer.call(__MODULE__, :get_trial_stats)
   end
@@ -32,7 +59,7 @@ defmodule Vaos.Ledger.ML.Referee do
   def init(opts) do
     step_budget = Keyword.fetch!(opts, :step_budget)
 
-    # In a real implementation, subscribe to PubSub
+    # In a real implementation, subscribe to PubSub:
     # Phoenix.PubSub.subscribe(Referee.PubSub, "agent:events")
 
     {:ok, %__MODULE__{
@@ -70,7 +97,13 @@ defmodule Vaos.Ledger.ML.Referee do
     {:reply, {:ok, stats}, state}
   end
 
-  # Event handling (simplified - would use PubSub in real implementation)
+  @impl true
+  def handle_call(msg, _from, state) do
+    Logger.warning("Referee received unexpected call: #{inspect(msg)}")
+    {:reply, {:error, :unknown_call}, state}
+  end
+
+  # Event handling via handle_info (PubSub / direct send)
 
   @impl true
   def handle_info({:trial_started, %{version_id: vid}}, state) do
@@ -119,6 +152,12 @@ defmodule Vaos.Ledger.ML.Referee do
     {:noreply, new_state}
   end
 
+  @impl true
+  def handle_info(msg, state) do
+    Logger.warning("Referee received unexpected message: #{inspect(msg)}")
+    {:noreply, state}
+  end
+
   # Trial management
 
   defp update_trial(state, vid, step, loss) do
@@ -165,11 +204,11 @@ defmodule Vaos.Ledger.ML.Referee do
         end)
         |> Enum.sort_by(fn {_vid, score} -> score end, :asc)
 
-      # Kill worst if >20% worse
+      # Kill worst if >20% worse than best
       case sorted do
         [{worst_vid, worst_score}, {_best_vid, best_score} | _] ->
           if best_score > 0 and worst_score < best_score * 0.8 do
-            Logger.info("Killing trial #{worst_vid}: #{worst_score} vs #{best_score}")
+            Logger.info("Killing trial #{worst_vid}: score #{worst_score} vs best #{best_score}")
             kill_trial(state, worst_vid)
           else
             state
@@ -184,10 +223,9 @@ defmodule Vaos.Ledger.ML.Referee do
   end
 
   defp checkpoint_score(trial, checkpoint) do
-    # Get score at checkpoint step
     case Enum.find(trial.points, fn {step, _loss} -> step == checkpoint end) do
       nil ->
-        # Use best score if checkpoint not found
+        # Use the most recent point if checkpoint step not found exactly
         case trial.points do
           [{_step, loss} | _] -> 1.0 - loss
           _ -> trial.best_score
@@ -199,7 +237,9 @@ defmodule Vaos.Ledger.ML.Referee do
   end
 
   defp kill_trial(state, vid) do
-    # In real implementation, would send kill signal to the trial
+    # In a real implementation, send a kill signal to the trial worker process.
+    # Here we mark the trial in the killed set; the next step event for this
+    # vid will be silently ignored (see handle_info for :step above).
     %{state | killed: MapSet.put(state.killed, vid)}
   end
 end

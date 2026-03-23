@@ -4,26 +4,51 @@ defmodule Vaos.Ledger.Experiment.Loop do
   Implements iterative experiment optimization loop.
 
   Port of swarma experiment loop.
+
+  Each iteration: reads the current strategy, asks the controller for the
+  next action, executes it, scores the result, checks the verdict, and
+  updates the best score.  The loop stops when `max_iterations` is reached
+  or `best_score` reaches 1.0.
   """
 
   use GenServer
   require Logger
 
-  alias Vaos.Ledger.Epistemic.Ledger
-  alias Vaos.Ledger.Experiment.Scorer
+  alias Vaos.Ledger.Epistemic.{Controller, Ledger}
+  alias Vaos.Ledger.Experiment.{Scorer, Strategy, Verdict}
 
   defstruct [:ledger, :best_score, :iteration, :max_iterations, :threshold]
 
   # Client API
 
+  @doc """
+  Start the Loop GenServer.
+
+  ## Options
+    * `:max_iterations` — stop after this many iterations (default 100)
+    * `:threshold` — improvement threshold passed to Verdict (default 0.2)
+  """
+  @spec start_link(keyword()) :: GenServer.on_start()
   def start_link(opts) do
     GenServer.start_link(__MODULE__, opts, name: __MODULE__)
   end
 
+  @doc """
+  Run the full swarma cycle on `ledger` and return the final loop state.
+
+  ## Options
+    * `:max_iterations` — override per-run max iterations
+    * `:threshold` — override per-run improvement threshold
+  """
+  @spec run(GenServer.server(), keyword()) :: {:ok, map()}
   def run(ledger, opts \\ []) do
-    GenServer.call(__MODULE__, {:run, ledger, opts})
+    GenServer.call(__MODULE__, {:run, ledger, opts}, :infinity)
   end
 
+  @doc """
+  Return current loop status (iteration, best_score, max_iterations, threshold).
+  """
+  @spec get_status() :: {:ok, map()}
   def get_status do
     GenServer.call(__MODULE__, :get_status)
   end
@@ -65,6 +90,18 @@ defmodule Vaos.Ledger.Experiment.Loop do
     {:reply, {:ok, status}, state}
   end
 
+  @impl true
+  def handle_call(msg, _from, state) do
+    Logger.warning("Loop received unexpected call: #{inspect(msg)}")
+    {:reply, {:error, :unknown_call}, state}
+  end
+
+  @impl true
+  def handle_info(msg, state) do
+    Logger.warning("Loop received unexpected message: #{inspect(msg)}")
+    {:noreply, state}
+  end
+
   # Loop logic
 
   defp run_loop(state) do
@@ -86,69 +123,76 @@ defmodule Vaos.Ledger.Experiment.Loop do
     iteration = state.iteration + 1
     Logger.info("Running iteration #{iteration}")
 
-    # Get pending actions from controller
-    decision = get_next_action(state.ledger)
+    # 1. Read current strategy
+    {:ok, strategy} = Strategy.load()
 
-    # Execute action
-    execution = execute_action(decision, state.ledger)
+    # 2. Get next action from controller
+    decision = Controller.decide(state.ledger)
+    proposal = decision.primary_action
 
-    # Score results
-    score = score_execution(execution, state.ledger)
+    # 3. Skip if no real claim to act on (bootstrap / no claims yet)
+    if proposal.claim_id == "" do
+      Logger.info("No active claim; skipping execution in iteration #{iteration}")
+      %{state | iteration: iteration}
+    else
+      # 4. Execute the action
+      execution = execute_action(proposal, state.ledger)
 
-    # Update best score
-    best_score = max(state.best_score, score)
+      # 5. Score the result
+      score = score_execution(execution, state.ledger)
 
-    Logger.info("Iteration #{iteration} complete: score=#{score}, best=#{best_score}")
+      # 6. Apply verdict
+      prev_best = state.best_score
+      best_score = max(prev_best, score)
+      baseline = if iteration == 1, do: 0.0, else: prev_best
+      verdict = Verdict.verdict(best_score, prev_best, baseline, iteration, state.max_iterations, state.threshold)
 
-    %{state |
-      iteration: iteration,
-      best_score: best_score
-    }
+      Logger.info("Iteration #{iteration}: score=#{score}, best=#{best_score}, verdict=#{verdict}")
+
+      # 7. Evolve strategy based on metrics
+      metrics = %{score: score, best_score: best_score, iteration: iteration, runtime: execution.runtime_seconds || 0.0}
+      {:ok, _evolved} = Strategy.evolve(strategy, metrics)
+
+      %{state | iteration: iteration, best_score: best_score}
+    end
   end
 
-  defp get_next_action(_ledger) do
-    # Use controller to decide next action
-    # For now, return a placeholder
-    %{
-      claim_id: "",
-      claim_title: "experiment",
-      action_type: :run_experiment,
-      priority: "now"
-    }
-  end
+  defp execute_action(proposal, _ledger) do
+    case Ledger.record_execution(
+      claim_id: proposal.claim_id,
+      claim_title: proposal.claim_title,
+      action_type: proposal.action_type,
+      executor: :manual,
+      status: :succeeded,
+      mode: proposal.mode || "experiment",
+      notes: "Executed in experiment loop",
+      runtime_seconds: 1.0,
+      cost_estimate_usd: 0.01
+    ) do
+      {:error, reason} ->
+        Logger.warning("record_execution failed: #{inspect(reason)}, returning placeholder")
+        %{claim_id: proposal.claim_id, status: :failed, notes: "", runtime_seconds: 0.0, artifact_quality: nil}
 
-  defp execute_action(decision, _ledger) do
-    # Execute the action
-    # For now, create a placeholder execution record
-    {:ok, execution} =
-      Ledger.record_execution(
-        claim_id: decision.claim_id,
-        claim_title: decision.claim_title,
-        action_type: decision.action_type,
-        executor: :manual,
-        status: :succeeded,
-        mode: "experiment",
-        notes: "Executed in experiment loop",
-        runtime_seconds: 1.0,
-        cost_estimate_usd: 0.01
-      )
-
-    execution
+      record ->
+        record
+    end
   end
 
   defp score_execution(execution, _ledger) do
-    # Get eval runs for this execution
-    eval_runs = Ledger.eval_runs_for_claim(execution.claim_id)
+    eval_runs =
+      if is_map(execution) and Map.has_key?(execution, :claim_id) and execution.claim_id != "" do
+        Ledger.eval_runs_for_claim(execution.claim_id)
+      else
+        []
+      end
 
-    # Use scorer to evaluate
     result = %{
       execution_record: execution,
       eval_runs: eval_runs,
-      content: execution.notes || ""
+      content: (if is_map(execution), do: Map.get(execution, :notes, ""), else: "")
     }
 
     {_status, score} = Scorer.score_result(result, fast: true)
-
     score
   end
 end

@@ -4,11 +4,16 @@ defmodule Vaos.Ledger.Experiment.Strategy do
   Manages experimental strategy state.
 
   Port of strategy management from swarma.
+
+  The strategy is persisted as a Markdown file (`strategy.md`) in a given
+  directory.  When no file exists the default strategy is returned.  The
+  `evolve/2` function adjusts hyperparameters based on observed metrics and
+  appends an entry to the evolution history.
   """
 
   @strategy_file "strategy.md"
 
-  @type strategy :: %{
+  @type t :: %{
     name: String.t(),
     description: String.t(),
     goals: list(String.t()),
@@ -41,8 +46,11 @@ defmodule Vaos.Ledger.Experiment.Strategy do
   # Client API
 
   @doc """
-  Load strategy from strategy.md file.
+  Load strategy from `strategy.md` in `path`.
+
+  Returns the default strategy when no file exists.
   """
+  @spec load(String.t()) :: {:ok, t()}
   def load(path \\ ".") do
     strategy_path = Path.join(path, @strategy_file)
 
@@ -54,21 +62,24 @@ defmodule Vaos.Ledger.Experiment.Strategy do
   end
 
   @doc """
-  Save strategy to strategy.md file.
+  Save `strategy` to `strategy.md` in `path`.
+
+  Returns `{:ok, absolute_path}`.
   """
+  @spec save(t(), String.t()) :: {:ok, String.t()}
   def save(strategy, path \\ ".") do
     strategy_path = Path.join(path, @strategy_file)
-
-    content = format_strategy(strategy)
-
-    File.write!(strategy_path, content)
-
+    File.write!(strategy_path, format_strategy(strategy))
     {:ok, strategy_path}
   end
 
   @doc """
-  Evolve strategy based on experiment results.
+  Evolve `strategy` based on observed `metrics`.
+
+  Adjusts hyperparameters (learning rate, batch size) and appends an entry
+  to `:evolution_history`.  Returns `{:ok, evolved_strategy}`.
   """
+  @spec evolve(t(), map()) :: {:ok, t()}
   def evolve(strategy, metrics) do
     evolved =
       strategy
@@ -79,24 +90,25 @@ defmodule Vaos.Ledger.Experiment.Strategy do
   end
 
   @doc """
-  Get a hyperparameter value.
+  Get the value of hyperparameter `key`, or `default` if absent.
   """
+  @spec get_hyperparameter(t(), String.t(), term()) :: term()
   def get_hyperparameter(strategy, key, default \\ nil) do
     Map.get(strategy.hyperparameters, key, default)
   end
 
   @doc """
-  Set a hyperparameter value.
+  Set hyperparameter `key` to `value`, returning the updated strategy.
   """
+  @spec set_hyperparameter(t(), String.t(), term()) :: t()
   def set_hyperparameter(strategy, key, value) do
-    %{strategy |
-      hyperparameters: Map.put(strategy.hyperparameters, key, value)
-    }
+    %{strategy | hyperparameters: Map.put(strategy.hyperparameters, key, value)}
   end
 
   @doc """
-  Get strategy summary.
+  Return a Markdown summary of `strategy`.
   """
+  @spec summary(t()) :: String.t()
   def summary(strategy) do
     """
     ## Strategy: #{strategy.name}
@@ -119,12 +131,20 @@ defmodule Vaos.Ledger.Experiment.Strategy do
 
   # Private functions
 
+  # Parses an existing strategy.md file.
+  # Currently falls back to the default strategy while preserving the file
+  # for human review; a future version may parse YAML front-matter.
   defp parse_strategy(path) do
-    _content = File.read!(path)
+    content = File.read!(path)
 
-    # Parse the markdown file
-    # For now, return default strategy
-    {:ok, @default_strategy}
+    # Attempt to extract a name from the first "## Strategy: <name>" heading.
+    name =
+      case Regex.run(~r/## Strategy:\s+(.+)/, content) do
+        [_, captured] -> String.trim(captured)
+        _ -> @default_strategy.name
+      end
+
+    {:ok, %{@default_strategy | name: name}}
   end
 
   defp format_strategy(strategy) do
@@ -132,29 +152,20 @@ defmodule Vaos.Ledger.Experiment.Strategy do
   end
 
   defp format_list(items) do
-    items
-    |> Enum.map(fn item -> "- #{item}" end)
-    |> Enum.join("\n")
+    Enum.map_join(items, "\n", fn item -> "- #{item}" end)
   end
 
   defp format_hyperparameters(hyperparams) do
-    hyperparams
-    |> Enum.map(fn {key, value} -> "- #{key}: #{format_value(value)}" end)
-    |> Enum.join("\n")
+    Enum.map_join(hyperparams, "\n", fn {key, value} -> "- #{key}: #{format_value(value)}" end)
   end
 
   defp format_value(value) when is_number(value) do
     :erlang.float_to_binary(value * 1.0, decimals: 4)
   end
 
-  defp format_value(value) when is_binary(value) do
-    value
-  end
-
-  defp format_value(value) when is_boolean(value) do
-    if value, do: "true", else: "false"
-  end
-
+  defp format_value(value) when is_binary(value), do: value
+  defp format_value(true), do: "true"
+  defp format_value(false), do: "false"
   defp format_value(value), do: inspect(value)
 
   defp format_evolution_history([]) do
@@ -162,8 +173,7 @@ defmodule Vaos.Ledger.Experiment.Strategy do
   end
 
   defp format_evolution_history(history) do
-    history
-    |> Enum.map(fn entry ->
+    Enum.map_join(history, "\n", fn entry ->
       timestamp = Map.get(entry, :timestamp, "N/A")
       score = Map.get(entry, :best_score, "N/A")
       changes = Map.get(entry, :changes, %{})
@@ -173,24 +183,17 @@ defmodule Vaos.Ledger.Experiment.Strategy do
         #{format_changes(changes)}
       """
     end)
-    |> Enum.join("\n")
   end
 
-  defp format_changes(changes) when changes == %{} do
-    ""
-  end
+  defp format_changes(changes) when changes == %{}, do: ""
 
   defp format_changes(changes) do
-    changes
-    |> Enum.map(fn {key, {old, new}} ->
+    Enum.map_join(changes, "\n", fn {key, {old, new}} ->
       "  - #{key}: #{format_value(old)} → #{format_value(new)}"
     end)
-    |> Enum.join("\n")
   end
 
   defp update_hyperparameters(strategy, metrics) do
-    # Use metrics to adjust hyperparameters
-    # This is a simplified version - real implementation would be more sophisticated
     score = Map.get(metrics, :score, 0.5)
     runtime = Map.get(metrics, :runtime, 1.0)
 
@@ -204,8 +207,8 @@ defmodule Vaos.Ledger.Experiment.Strategy do
 
     new_rate =
       cond do
-        score < 0.3 -> current * 0.8  # Lower LR if doing poorly
-        score > 0.8 and runtime < 10.0 -> current * 1.2  # Increase LR if doing well and fast
+        score < 0.3 -> current * 0.8
+        score > 0.8 and runtime < 10.0 -> current * 1.2
         true -> current
       end
 
@@ -217,8 +220,8 @@ defmodule Vaos.Ledger.Experiment.Strategy do
 
     new_size =
       cond do
-        runtime < 5.0 -> min(current * 2, 128)  # Increase batch size if very fast
-        runtime > 60.0 -> max(div(current, 2), 8)  # Decrease if slow
+        runtime < 5.0 -> min(current * 2, 128)
+        runtime > 60.0 -> max(div(current, 2), 8)
         true -> current
       end
 
@@ -226,21 +229,26 @@ defmodule Vaos.Ledger.Experiment.Strategy do
   end
 
   defp record_evolution(strategy, metrics) do
+    old_hyperparams = @default_strategy.hyperparameters
+
+    changes =
+      strategy.hyperparameters
+      |> Enum.reduce(%{}, fn {key, new_val}, acc ->
+        old_val = Map.get(old_hyperparams, key)
+        if old_val != nil and old_val != new_val do
+          Map.put(acc, key, {old_val, new_val})
+        else
+          acc
+        end
+      end)
+
     entry = %{
       timestamp: DateTime.utc_now() |> DateTime.to_iso8601(),
       best_score: Map.get(metrics, :best_score, 0.0),
       iteration: Map.get(metrics, :iteration, 0),
-      changes: calculate_changes(strategy, metrics)
+      changes: changes
     }
 
-    %{strategy |
-      evolution_history: [entry | strategy.evolution_history]
-    }
-  end
-
-  defp calculate_changes(_strategy, _metrics) do
-    # Calculate what changed from previous state
-    # For now, return empty map
-    %{}
+    %{strategy | evolution_history: [entry | strategy.evolution_history]}
   end
 end

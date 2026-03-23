@@ -13,6 +13,7 @@ defmodule Vaos.Ledger.Epistemic.Policy do
   @doc """
   Rank actions by expected information gain.
   """
+  @spec rank_actions(GenServer.server(), list(option())) :: list(Vaos.Ledger.Epistemic.Models.ActionProposal.t())
   def rank_actions(ledger, opts \\ []) do
     limit = Keyword.get(opts, :limit, 10)
 

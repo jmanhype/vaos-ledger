@@ -7,12 +7,20 @@ defmodule Vaos.Ledger.Experiment.Scorer do
   alias Vaos.Ledger.Epistemic.Models
 
   @type score_option :: {:fast, boolean()} | {:use_cache, boolean()}
-
+  @type score_result :: {:cached | :computed, float()}
 
   @doc """
-  Score an experiment result.
-  Returns a score between 0.0 and 1.0.
+  Score an experiment result map.
+
+  Returns `{:cached, score}` when a cached score is found, or
+  `{:computed, score}` otherwise.  The result map must contain at least
+  `:execution_record`.
+
+  ## Options
+    * `:fast` — use caching (default `true`)
+    * `:use_cache` — consult in-memory cache (default `true`)
   """
+  @spec score_result(map(), list(score_option())) :: score_result()
   def score_result(result, opts \\ []) do
     fast = Keyword.get(opts, :fast, true)
     use_cache = Keyword.get(opts, :use_cache, true)
@@ -32,9 +40,14 @@ defmodule Vaos.Ledger.Experiment.Scorer do
 
   @doc """
   Score multiple results in batch.
+
+  Returns a list of `{result, status, score}` tuples sorted descending by
+  score.
   """
+  @spec score_batch(list(map()), list(score_option())) :: list({map(), atom(), float()})
   def score_batch(results, opts \\ []) do
-    Enum.map(results, fn result ->
+    results
+    |> Enum.map(fn result ->
       {status, score} = score_result(result, opts)
       {result, status, score}
     end)
@@ -42,8 +55,14 @@ defmodule Vaos.Ledger.Experiment.Scorer do
   end
 
   @doc """
-  Compute quality score from metrics.
+  Compute a composite quality score from a metrics map.
+
+  Keys: `:correctness`, `:efficiency`, `:clarity`, `:novelty`,
+  `:reproducibility`.  Missing keys default to 0.5.
+
+  Returns a float in `[0.0, 1.0]`.
   """
+  @spec compute_quality_score(map()) :: float()
   def compute_quality_score(metrics) do
     weights = %{
       correctness: 0.35,
@@ -67,11 +86,14 @@ defmodule Vaos.Ledger.Experiment.Scorer do
   end
 
   @doc """
-  Estimate score without LLM call.
-  Uses heuristics based on execution metrics.
+  Estimate score from an execution record and optional eval runs, without
+  making an LLM call.
+
+  Factors: execution status, runtime, artifact quality, eval run scores.
+  Returns a float in `[0.0, 1.0]`.
   """
+  @spec estimate_score(Models.ExecutionRecord.t() | map(), list()) :: float()
   def estimate_score(execution_record, eval_runs) do
-    # Factor in execution status
     base_score =
       case execution_record.status do
         :succeeded -> 0.8
@@ -80,7 +102,6 @@ defmodule Vaos.Ledger.Experiment.Scorer do
         _ -> 0.4
       end
 
-    # Adjust for runtime
     runtime_factor =
       cond do
         is_nil(execution_record.runtime_seconds) -> 1.0
@@ -90,7 +111,6 @@ defmodule Vaos.Ledger.Experiment.Scorer do
         true -> 0.6
       end
 
-    # Adjust for artifact quality if available
     quality_factor =
       case execution_record.artifact_quality do
         nil -> 1.0
@@ -100,7 +120,6 @@ defmodule Vaos.Ledger.Experiment.Scorer do
         _ -> 0.6
       end
 
-    # Adjust for eval run results if available
     eval_factor =
       if Enum.empty?(eval_runs) do
         1.0
@@ -116,7 +135,7 @@ defmodule Vaos.Ledger.Experiment.Scorer do
           |> Enum.count(& &1.passed)
           |> (&(&1 / length(eval_runs))).()
 
-        (avg_score * 0.7 + pass_rate * 0.3)
+        avg_score * 0.7 + pass_rate * 0.3
       end
 
     Models.clamp(base_score * runtime_factor * quality_factor * eval_factor)
@@ -125,11 +144,8 @@ defmodule Vaos.Ledger.Experiment.Scorer do
   # Private functions
 
   defp compute_score(result, _opts) do
-    # In a real implementation, this would call an LLM
-    # For now, use heuristic estimation
     execution_record = Map.get(result, :execution_record)
     eval_runs = Map.get(result, :eval_runs, [])
-
     estimate_score(execution_record, eval_runs)
   end
 
@@ -137,7 +153,6 @@ defmodule Vaos.Ledger.Experiment.Scorer do
     execution_record = Map.get(result, :execution_record)
     content = Map.get(result, :content, "")
 
-    # Create a cache key based on content hash and execution status
     hash =
       :crypto.hash(:sha256, content <> Atom.to_string(execution_record.status))
       |> Base.encode16(case: :lower)
@@ -146,7 +161,7 @@ defmodule Vaos.Ledger.Experiment.Scorer do
   end
 
   defp get_from_cache(_key) do
-    # In a real implementation, use ETS or other caching
+    # In a real implementation, use ETS or another cache backend.
     :miss
   end
 end
