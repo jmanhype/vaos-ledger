@@ -5,11 +5,15 @@ defmodule Vaos.Ledger.Experiment.LoopTest do
   alias Vaos.Ledger.Epistemic.Ledger
 
   setup do
-    if pid = GenServer.whereis(Loop) do
-      GenServer.stop(pid)
+    try do
+      if pid = GenServer.whereis(Loop), do: GenServer.stop(pid)
+    catch
+      :exit, _ -> :ok
     end
-    if pid = GenServer.whereis(Ledger) do
-      GenServer.stop(pid)
+    try do
+      if pid = GenServer.whereis(Ledger), do: GenServer.stop(pid)
+    catch
+      :exit, _ -> :ok
     end
     :timer.sleep(20)
 
@@ -17,8 +21,16 @@ defmodule Vaos.Ledger.Experiment.LoopTest do
     {:ok, _} = Ledger.start_link(path: path)
 
     on_exit(fn ->
-      if pid = GenServer.whereis(Loop), do: GenServer.stop(pid)
-      if pid = GenServer.whereis(Ledger), do: GenServer.stop(pid)
+      try do
+        if pid = GenServer.whereis(Loop), do: GenServer.stop(pid)
+      catch
+        :exit, _ -> :ok
+      end
+      try do
+        if pid = GenServer.whereis(Ledger), do: GenServer.stop(pid)
+      catch
+        :exit, _ -> :ok
+      end
       File.rm(path)
     end)
     %{path: path}

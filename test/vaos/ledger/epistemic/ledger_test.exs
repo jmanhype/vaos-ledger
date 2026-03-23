@@ -12,7 +12,11 @@ defmodule Vaos.Ledger.Epistemic.LedgerTest do
     path = Path.join(System.tmp_dir!(), "ledger_test_#{:rand.uniform(999999)}.json")
     {:ok, _pid} = Ledger.start_link(path: path)
     on_exit(fn ->
-      if pid = GenServer.whereis(Ledger), do: GenServer.stop(pid)
+      try do
+        if pid = GenServer.whereis(Ledger), do: GenServer.stop(pid)
+      catch
+        :exit, _ -> :ok
+      end
       File.rm(path)
     end)
     %{path: path}

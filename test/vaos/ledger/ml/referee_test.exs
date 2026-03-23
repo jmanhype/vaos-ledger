@@ -10,7 +10,11 @@ defmodule Vaos.Ledger.ML.RefereeTest do
 
     {:ok, _pid} = Referee.start_link(step_budget: 100)
     on_exit(fn ->
-      if pid = GenServer.whereis(Referee), do: GenServer.stop(pid)
+      try do
+        if pid = GenServer.whereis(Referee), do: GenServer.stop(pid)
+      catch
+        :exit, _ -> :ok
+      end
     end)
     :ok
   end
