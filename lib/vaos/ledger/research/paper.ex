@@ -9,9 +9,11 @@ defmodule Vaos.Ledger.Research.Paper do
 
   require Logger
 
+  defstruct [:title, :abstract, :introduction, :methods, :results, :conclusions, :keywords, bibliography: []]
+
   @type llm_fn :: (String.t() -> {:ok, String.t()} | {:error, term()})
 
-  @type paper :: %{
+  @type paper :: %__MODULE__{
           title: String.t(),
           abstract: String.t(),
           introduction: String.t(),
@@ -21,6 +23,8 @@ defmodule Vaos.Ledger.Research.Paper do
           keywords: String.t(),
           bibliography: [map()]
         }
+
+  @type t :: paper()
 
   @type paper_context :: %{
           idea: String.t(),
@@ -50,7 +54,7 @@ defmodule Vaos.Ledger.Research.Paper do
            generate_section("Conclusions", context, llm_fn, citation_context, title_and_abstract),
          {:ok, keywords} <- generate_keywords(context, llm_fn) do
       {:ok,
-       %{
+       %__MODULE__{
          title: title_and_abstract.title,
          abstract: title_and_abstract.abstract,
          introduction: introduction,

@@ -6,7 +6,7 @@ defmodule Vaos.Ledger.Experiment.Scorer do
 
   alias Vaos.Ledger.Epistemic.Models
 
-  @type score_option :: {:fast, boolean()} | {:use_cache, boolean()}
+  @type score_option :: {:fast, boolean()} | {:use_cache, boolean()} | {:llm_fn, (String.t() -> {:ok, String.t()} | {:error, term()})}
   @type score_result :: {:cached | :computed, float()}
 
   @doc """
@@ -19,6 +19,8 @@ defmodule Vaos.Ledger.Experiment.Scorer do
   ## Options
     * `:fast` — use caching (default `true`)
     * `:use_cache` — consult in-memory cache (default `true`)
+    * `:llm_fn` — optional callback `(String.t() -> {:ok, String.t()} | {:error, term()})`.
+      If provided, uses the LLM to score the result. Falls back to estimation on failure.
   """
   @spec score_result(map(), list(score_option())) :: score_result()
   def score_result(result, opts \\ []) do
@@ -143,10 +145,42 @@ defmodule Vaos.Ledger.Experiment.Scorer do
 
   # Private functions
 
-  defp compute_score(result, _opts) do
+  defp compute_score(result, opts) do
+    llm_fn = Keyword.get(opts, :llm_fn)
     execution_record = Map.get(result, :execution_record)
     eval_runs = Map.get(result, :eval_runs, [])
-    estimate_score(execution_record, eval_runs)
+
+    if llm_fn do
+      score_with_llm(result, llm_fn, execution_record, eval_runs)
+    else
+      estimate_score(execution_record, eval_runs)
+    end
+  end
+
+  defp score_with_llm(result, llm_fn, execution_record, eval_runs) do
+    content = Map.get(result, :content, "")
+    status = execution_record.status
+
+    prompt = """
+    Score the following experiment result on a scale of 0.0 to 1.0.
+    Consider correctness, efficiency, and quality.
+
+    Status: #{status}
+    Content: #{String.slice(content, 0, 500)}
+
+    Respond with just a number between 0.0 and 1.0.
+    """
+
+    case llm_fn.(prompt) do
+      {:ok, response} ->
+        case Float.parse(String.trim(response)) do
+          {score, _} -> Vaos.Ledger.Epistemic.Models.clamp(score)
+          :error -> estimate_score(execution_record, eval_runs)
+        end
+
+      {:error, _} ->
+        estimate_score(execution_record, eval_runs)
+    end
   end
 
   defp cache_key(result) do

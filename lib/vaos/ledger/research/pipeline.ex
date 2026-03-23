@@ -72,7 +72,11 @@ defmodule Vaos.Ledger.Research.Pipeline do
   def run(opts \\ []) do
     ledger = Keyword.fetch!(opts, :ledger)
     llm_fn = Keyword.fetch!(opts, :llm_fn)
-    input = Keyword.fetch!(opts, :input)
+    input =
+      case Keyword.fetch(opts, :input) do
+        {:ok, value} -> value
+        :error -> raise ArgumentError, "Pipeline.run requires :input keyword argument"
+      end
     _max_iterations = Keyword.get(opts, :max_iterations, @default_opts[:max_iterations])
     _target_score = Keyword.get(opts, :target_score, @default_opts[:target_score])
 

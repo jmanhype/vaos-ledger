@@ -48,6 +48,33 @@ defmodule Vaos.Ledger.Experiment.Verdict do
   end
 
   @doc """
+  Keyword-args variant of `verdict/6`.
+
+  ## Options
+    * `:best` - current best score (required)
+    * `:prev_best` - previous best score (required)
+    * `:baseline` - baseline score (required)
+    * `:iteration` - current iteration (required)
+    * `:max_iterations` - max iterations (default: 100)
+    * `:threshold` - improvement threshold (default: 0.2)
+
+  ## Example
+
+      Verdict.verdict(best: 9.0, prev_best: 7.0, baseline: 6.0, iteration: 5)
+
+  """
+  @spec verdict(keyword()) :: verdict()
+  def verdict(opts) when is_list(opts) do
+    best = Keyword.fetch!(opts, :best)
+    prev_best = Keyword.fetch!(opts, :prev_best)
+    baseline = Keyword.fetch!(opts, :baseline)
+    iteration = Keyword.fetch!(opts, :iteration)
+    max_iterations = Keyword.get(opts, :max_iterations, 100)
+    threshold = Keyword.get(opts, :threshold, @default_threshold)
+    verdict(best, prev_best, baseline, iteration, max_iterations, threshold)
+  end
+
+  @doc """
   Return the fractional improvement of new_score over baseline_score.
   Returns 0.0 when baseline_score is zero.
   """

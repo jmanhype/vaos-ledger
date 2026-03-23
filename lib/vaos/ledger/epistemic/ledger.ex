@@ -20,7 +20,8 @@ defmodule Vaos.Ledger.Epistemic.Ledger do
   """
   def start_link(opts) do
     path = Keyword.fetch!(opts, :path)
-    GenServer.start_link(__MODULE__, path, name: __MODULE__)
+    name = Keyword.get(opts, :name, __MODULE__)
+    GenServer.start_link(__MODULE__, path, name: name)
   end
 
   @doc """
@@ -498,6 +499,8 @@ defmodule Vaos.Ledger.Epistemic.Ledger do
 
   @impl true
   def handle_call({:add_assumption, attrs}, _from, state) do
+    # Normalize :statement to :text for caller convenience
+    attrs = Keyword.put_new(attrs, :text, Keyword.get(attrs, :statement, ""))
     claim_id = Keyword.fetch!(attrs, :claim_id)
 
     case fetch_claim(state, claim_id) do
@@ -577,6 +580,8 @@ defmodule Vaos.Ledger.Epistemic.Ledger do
 
   @impl true
   def handle_call({:add_attack, attrs}, _from, state) do
+    # Normalize :statement to :description for caller convenience
+    attrs = Keyword.put_new(attrs, :description, Keyword.get(attrs, :statement, ""))
     claim_id = Keyword.fetch!(attrs, :claim_id)
 
     case fetch_claim(state, claim_id) do
