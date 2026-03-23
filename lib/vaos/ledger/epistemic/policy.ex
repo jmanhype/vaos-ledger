@@ -12,19 +12,23 @@ defmodule Vaos.Ledger.Epistemic.Policy do
 
   @doc """
   Rank actions by expected information gain.
+
+  WARNING: This function calls `GenServer.call/3` on the `ledger` process.
+  It must NOT be called from within the Ledger GenServer process itself,
+  or it will deadlock. Always call from an external process.
   """
   @spec rank_actions(GenServer.server(), list(option())) :: list(Vaos.Ledger.Epistemic.Models.ActionProposal.t())
   def rank_actions(ledger, opts \\ []) do
     limit = Keyword.get(opts, :limit, 10)
 
-    claims = GenServer.call(ledger, :list_claims)
+    claims = GenServer.call(ledger, :list_claims, 5_000)
 
     proposals =
       Enum.flat_map(claims, fn claim ->
         if claim.status == :archived do
           []
         else
-          metrics = GenServer.call(ledger, {:claim_metrics, claim.id})
+          metrics = GenServer.call(ledger, {:claim_metrics, claim.id}, 5_000)
           build_proposals_for_claim(claim, metrics, ledger)
         end
       end)

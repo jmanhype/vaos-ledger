@@ -57,11 +57,12 @@ defmodule Vaos.Ledger.ML.CrashLearnerTest do
       :timer.sleep(30)
 
       {:ok, pitfalls} = CrashLearner.get_pitfalls(pid)
-      assert length(pitfalls) >= 1
+      assert length(pitfalls) == 1
 
       pitfall = hd(pitfalls)
-      assert pitfall.count >= 3
+      assert pitfall.count == 3
       assert String.contains?(pitfall.summary, "Recurring crash")
+      assert String.contains?(pitfall.summary, "KeyError")
     end
 
     test "does not distill below threshold", %{pid: pid} do
@@ -81,7 +82,9 @@ defmodule Vaos.Ledger.ML.CrashLearnerTest do
       :timer.sleep(30)
 
       {:ok, pitfalls} = CrashLearner.get_pitfalls(pid)
-      assert length(pitfalls) >= 1
+      assert length(pitfalls) == 1
+      pitfall = hd(pitfalls)
+      assert String.contains?(pitfall.summary, "timeout")
     end
   end
 

@@ -105,6 +105,10 @@ defmodule Vaos.Ledger.ML.RefereeTest do
     end
 
     test "kill logic fires when worst trial is >20% below best" do
+      # Restart with high patience so early stop does not interfere
+      GenServer.stop(Referee)
+      {:ok, _} = Referee.start_link(step_budget: 100, early_stop_patience: 100)
+
       # Two trials. v1 gets good scores, v2 gets bad scores.
       send(Referee, {:trial_started, %{version_id: "v1"}})
       send(Referee, {:trial_started, %{version_id: "v2"}})
@@ -116,11 +120,11 @@ defmodule Vaos.Ledger.ML.RefereeTest do
         send(Referee, {:step, %{version_id: "v1", step: step, loss: 0.1}})   # best_score ~0.9
         send(Referee, {:step, %{version_id: "v2", step: step, loss: 0.9}})   # best_score ~0.1
       end
-      :timer.sleep(50)
+      Process.sleep(100)
 
       {:ok, status} = Referee.get_status()
       # v2 should have been killed: 0.1 < 0.9 * 0.8 = 0.72
-      assert status.killed_count >= 1
+      assert status.killed_count == 1
     end
   end
 
@@ -201,11 +205,11 @@ defmodule Vaos.Ledger.ML.RefereeTest do
       for step <- 1..10 do
         send(Referee, {:step, %{version_id: "v1", step: step, loss: 0.5}})
       end
-      :timer.sleep(50)
+      Process.sleep(100)
 
       {:ok, status} = Referee.get_status()
       # Trial should be killed due to early stopping
-      assert status.killed_count >= 1
+      assert status.killed_count == 1
     end
 
     test "does not early-stop when still improving" do

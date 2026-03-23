@@ -17,7 +17,7 @@ defmodule Vaos.Ledger.Experiment.Loop do
   alias Vaos.Ledger.Epistemic.{Controller, Ledger}
   alias Vaos.Ledger.Experiment.{Scorer, Strategy, Verdict}
 
-  defstruct [:ledger, :best_score, :iteration, :max_iterations, :threshold, :experiment_fn]
+  defstruct [:ledger, :best_score, :iteration, :max_iterations, :threshold, :experiment_fn, :timeout]
 
   # Client API
 
@@ -42,7 +42,7 @@ defmodule Vaos.Ledger.Experiment.Loop do
   """
   @spec run(GenServer.server(), keyword()) :: {:ok, map()}
   def run(ledger, opts \\ []) do
-    GenServer.call(__MODULE__, {:run, ledger, opts}, :infinity)
+    GenServer.call(__MODULE__, {:run, ledger, opts}, Keyword.get(opts, :timeout, 300_000))
   end
 
   @doc """
@@ -63,7 +63,8 @@ defmodule Vaos.Ledger.Experiment.Loop do
       iteration: 0,
       max_iterations: Keyword.get(opts, :max_iterations, 100),
       threshold: Keyword.get(opts, :threshold, 0.2),
-      experiment_fn: Keyword.get(opts, :experiment_fn)
+      experiment_fn: Keyword.get(opts, :experiment_fn),
+      timeout: Keyword.get(opts, :timeout, 300_000)
     }}
   end
 

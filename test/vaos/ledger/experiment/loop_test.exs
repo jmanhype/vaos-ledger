@@ -80,7 +80,7 @@ defmodule Vaos.Ledger.Experiment.LoopTest do
       Ledger.add_assumption(claim_id: claim.id, text: "Assume convergence", risk: 0.6)
 
       {:ok, final} = Loop.run(Ledger, max_iterations: 3)
-      assert final.iteration <= 3
+      assert final.iteration == 3
       assert is_float(final.best_score)
     end
 

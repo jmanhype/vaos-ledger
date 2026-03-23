@@ -14,7 +14,7 @@ defmodule Vaos.Ledger.Experiment.ScorerTest do
         content: "test content"
       }
       {status, score} = Scorer.score_result(result)
-      assert status in [:cached, :computed]
+      assert status == :computed
       assert is_number(score)
       assert score >= 0.0 and score <= 1.0
     end

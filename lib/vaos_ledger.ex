@@ -94,6 +94,13 @@ defmodule VaosLedger do
   defdelegate set_hyperparameter(strategy, key, value), to: Vaos.Ledger.Experiment.Strategy
   defdelegate summary(strategy), to: Vaos.Ledger.Experiment.Strategy
 
+  # Convenience aliases matching Vaos.Ledger API
+  defdelegate load_strategy(), to: Vaos.Ledger.Experiment.Strategy, as: :load
+  defdelegate load_strategy(path), to: Vaos.Ledger.Experiment.Strategy, as: :load
+  defdelegate save_strategy(strategy), to: Vaos.Ledger.Experiment.Strategy, as: :save
+  defdelegate save_strategy(strategy, path), to: Vaos.Ledger.Experiment.Strategy, as: :save
+  defdelegate evolve_strategy(strategy, metrics), to: Vaos.Ledger.Experiment.Strategy, as: :evolve
+
   # Research modules
   defdelegate generate_idea(ledger, input_artifact), to: Vaos.Ledger.Research.Pipeline
   defdelegate develop_method(ledger, hypothesis), to: Vaos.Ledger.Research.Pipeline

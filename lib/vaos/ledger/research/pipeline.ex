@@ -77,8 +77,8 @@ defmodule Vaos.Ledger.Research.Pipeline do
         {:ok, value} -> value
         :error -> raise ArgumentError, "Pipeline.run requires :input keyword argument"
       end
-    _max_iterations = Keyword.get(opts, :max_iterations, @default_opts[:max_iterations])
-    _target_score = Keyword.get(opts, :target_score, @default_opts[:target_score])
+    max_iterations = Keyword.get(opts, :max_iterations, @default_opts[:max_iterations])
+    target_score = Keyword.get(opts, :target_score, @default_opts[:target_score])
 
     description = extract_description(input)
 
@@ -100,20 +100,7 @@ defmodule Vaos.Ledger.Research.Pipeline do
     }
 
     Logger.info("Starting research pipeline")
-
-    with {:ok, state} <- run_stage_idea(initial_state, description, llm_fn),
-         {:ok, state} <- run_stage_method(state, llm_fn),
-         {:ok, state} <- run_stage_literature(state, opts),
-         {:ok, state} <- run_stage_experiments(state, opts),
-         {:ok, state} <- run_stage_paper(state, llm_fn) do
-      final = %{state | status: :completed, stage: :paper}
-      Logger.info("Research pipeline completed")
-      {:ok, final}
-    else
-      {:error, reason} ->
-        Logger.error("Pipeline failed: #{inspect(reason)}")
-        {:error, reason}
-    end
+    run_pipeline(initial_state, description, llm_fn, opts, max_iterations, target_score)
   end
 
   # == Stage: Idea Generation ==
@@ -415,6 +402,38 @@ defmodule Vaos.Ledger.Research.Pipeline do
   end
 
   # == Full Pipeline Stages ==
+
+  defp run_pipeline(state, description, llm_fn, opts, max_iterations, target_score) do
+    with {:ok, state} <- run_stage_idea(state, description, llm_fn),
+         {:ok, state} <- run_stage_method(state, llm_fn),
+         {:ok, state} <- run_stage_literature(state, opts),
+         {:ok, state} <- run_stage_experiments(state, opts),
+         {:ok, state} <- run_stage_paper(state, llm_fn) do
+      if state.iteration < max_iterations and not exceeds_score?(state, target_score) do
+        Logger.info("Pipeline iteration #{state.iteration}/#{max_iterations}, re-running stages")
+        run_pipeline(state, description, llm_fn, opts, max_iterations, target_score)
+      else
+        final = %{state | status: :completed, stage: :paper}
+        Logger.info("Research pipeline completed after #{state.iteration} iterations")
+        {:ok, final}
+      end
+    else
+      {:error, reason} ->
+        Logger.error("Pipeline failed: #{inspect(reason)}")
+        {:error, reason}
+    end
+  end
+
+  defp exceeds_score?(_state, nil), do: false
+  defp exceeds_score?(state, target_score) do
+    case state.research.paper do
+      nil -> false
+      paper when is_map(paper) ->
+        score = Map.get(paper, :score, 0.0) || 0.0
+        score >= target_score
+      _ -> false
+    end
+  end
 
   defp run_stage_idea(state, description, llm_fn) do
     Logger.info("Pipeline stage: idea generation")

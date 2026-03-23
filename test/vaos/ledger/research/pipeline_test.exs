@@ -88,10 +88,10 @@ defmodule Vaos.Ledger.Research.PipelineTest do
         ledger: Ledger,
         llm_fn: llm_fn,
         input: "Test research topic",
-        max_iterations: 5
+        max_iterations: 4
       )
       assert state.status == :completed
-      assert state.iteration > 0
+      assert state.iteration == 4
     end
   end
 end
