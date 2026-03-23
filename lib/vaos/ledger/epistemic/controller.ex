@@ -143,9 +143,12 @@ defmodule Vaos.Ledger.Epistemic.Controller do
     avg_failed_artifact_quality =
       if length(failed) > 0 do
         failed
-        |> Enum.filter(&not is_nil(&1.artifact_quality))
+        |> Enum.filter(&(not is_nil(&1.artifact_quality)))
         |> Enum.map(& &1.artifact_quality)
-        |> (&Enum.sum(&1) / length(&1)).()
+        |> then(fn
+          [] -> 0.0
+          scores -> Enum.sum(scores) / length(scores)
+        end)
       else
         0.0
       end
@@ -185,9 +188,12 @@ defmodule Vaos.Ledger.Epistemic.Controller do
     avg_success_artifact_quality =
       if length(succeeded) > 0 do
         succeeded
-        |> Enum.filter(&not is_nil(&1.artifact_quality))
+        |> Enum.filter(&(not is_nil(&1.artifact_quality)))
         |> Enum.map(& &1.artifact_quality)
-        |> (&Enum.sum(&1) / length(&1)).()
+        |> then(fn
+          [] -> 0.0
+          scores -> Enum.sum(scores) / length(scores)
+        end)
       else
         0.0
       end

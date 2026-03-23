@@ -23,7 +23,7 @@ defmodule Vaos.Ledger.Experiment.Scorer do
       with {:ok, score} <- get_from_cache(cache_key) do
         {:cached, score}
       else
-        _ -> compute_score(result, opts)
+        _ -> {:computed, compute_score(result, opts)}
       end
     else
       {:computed, compute_score(result, opts)}

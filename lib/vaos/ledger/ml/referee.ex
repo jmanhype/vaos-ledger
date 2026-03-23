@@ -122,20 +122,15 @@ defmodule Vaos.Ledger.ML.Referee do
   # Trial management
 
   defp update_trial(state, vid, step, loss) do
-    points = get_in(state, [:trials, vid, :points]) || []
-    points = [step, loss | Enum.take(points, 99)]
+    trial = Map.get(state.trials, vid, %{points: [], best_score: -1.0, status: :running})
+    points = [{step, loss} | Enum.take(trial.points, 99)]
+    best_score = max(trial.best_score, 1.0 - loss)
 
-    best_score =
-      state
-      |> get_in([:trials, vid, :best_score])
-      |> Kernel.||(-1.0)
-      |> max(1.0 - loss)
-
-    put_in(state, [:trials, vid], %{
+    %{state | trials: Map.put(state.trials, vid, %{
       points: points,
       best_score: best_score,
       status: :running
-    })
+    })}
   end
 
   defp maybe_kill_loser(state) do
@@ -190,12 +185,13 @@ defmodule Vaos.Ledger.ML.Referee do
 
   defp checkpoint_score(trial, checkpoint) do
     # Get score at checkpoint step
-    trial.points
-    |> Enum.find_value(fn {step, _loss} -> step == checkpoint end)
-    |> case do
+    case Enum.find(trial.points, fn {step, _loss} -> step == checkpoint end) do
       nil ->
         # Use best score if checkpoint not found
-        1.0 - (trial.points |> hd() |> elem(1))
+        case trial.points do
+          [{_step, loss} | _] -> 1.0 - loss
+          _ -> trial.best_score
+        end
 
       {_step, loss} ->
         1.0 - loss

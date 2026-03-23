@@ -449,8 +449,8 @@ defmodule Vaos.Ledger.Epistemic.Ledger do
           title: claim.title,
           mode: Map.get(claim.metadata, "mode", "") |> String.trim() |> maybe_default("ml_research"),
           status: claim.status,
-          confidence: Float.round(claim.confidence, 3),
-          uncertainty: Float.round(metrics["uncertainty"], 3),
+          confidence: safe_round(claim.confidence, 3),
+          uncertainty: safe_round(metrics["uncertainty"], 3),
           evidence_count: metrics["evidence_count"],
           open_attack_count: metrics["open_attack_count"],
           artifact_count: metrics["artifact_count"],
@@ -464,8 +464,8 @@ defmodule Vaos.Ledger.Epistemic.Ledger do
           eval_run_count: metrics["eval_run_count"],
           decision_count: metrics["decision_count"],
           execution_count: metrics["execution_count"],
-          novelty: Float.round(claim.novelty, 3),
-          falsifiability: Float.round(claim.falsifiability, 3)
+          novelty: safe_round(claim.novelty, 3),
+          falsifiability: safe_round(claim.falsifiability, 3)
         }
       end)
 
@@ -474,16 +474,16 @@ defmodule Vaos.Ledger.Epistemic.Ledger do
 
   @impl true
   def handle_call({:add_claim, attrs}, _from, state) do
-    claim =
-      Models.Claim.new(
-        title: Keyword.fetch!(attrs, :title),
-        statement: Keyword.fetch!(attrs, :statement),
-        novelty: Keyword.get(attrs, :novelty, 0.5),
-        falsifiability: Keyword.get(attrs, :falsifiability, 0.5),
-        tags: Keyword.get(attrs, :tags, []),
-        metadata: Keyword.get(attrs, :metadata, %{}),
-        id: Keyword.get(attrs, :id)
-      )
+    base_attrs = [
+      title: Keyword.fetch!(attrs, :title),
+      statement: Keyword.fetch!(attrs, :statement),
+      novelty: Keyword.get(attrs, :novelty, 0.5),
+      falsifiability: Keyword.get(attrs, :falsifiability, 0.5),
+      tags: Keyword.get(attrs, :tags, []),
+      metadata: Keyword.get(attrs, :metadata, %{})
+    ]
+    base_attrs = if Keyword.has_key?(attrs, :id), do: Keyword.put(base_attrs, :id, attrs[:id]), else: base_attrs
+    claim = Models.Claim.new(base_attrs)
 
     new_state = put_in(state.claims[claim.id], claim) |> persist()
     {:reply, claim, new_state}
@@ -493,8 +493,9 @@ defmodule Vaos.Ledger.Epistemic.Ledger do
   def handle_call({:add_assumption, attrs}, _from, state) do
     claim_id = Keyword.fetch!(attrs, :claim_id)
 
-    with {:ok, _claim} <- fetch_claim(state, claim_id) do
-      assumption =
+    case fetch_claim(state, claim_id) do
+      {:ok, _claim} ->
+        assumption =
         Models.Assumption.new(
           claim_id: claim_id,
           text: Keyword.fetch!(attrs, :text),
@@ -508,10 +509,21 @@ defmodule Vaos.Ledger.Epistemic.Ledger do
       new_state =
         state
         |> put_in([:assumptions, assumption.id], assumption)
-        |> update_in([:claims, claim_id, :assumption_ids], fn ids -> [assumption.id | ids] end)
+        |> then(fn s ->
+
+          c = Map.get(s.claims, claim_id)
+
+          c = %{c | assumption_ids: [assumption.id | c.assumption_ids]}
+
+          %{s | claims: Map.put(s.claims, claim_id, c)}
+
+        end)
         |> persist()
 
-      {:reply, assumption, new_state}
+        {:reply, assumption, new_state}
+
+      {:error, _} = error ->
+        {:reply, error, state}
     end
   end
 
@@ -519,9 +531,10 @@ defmodule Vaos.Ledger.Epistemic.Ledger do
   def handle_call({:add_evidence, attrs}, _from, state) do
     claim_id = Keyword.fetch!(attrs, :claim_id)
 
-    with {:ok, _claim} <- fetch_claim(state, claim_id) do
-      evidence =
-        Models.Evidence.new(
+    case fetch_claim(state, claim_id) do
+      {:ok, _claim} ->
+        evidence =
+          Models.Evidence.new(
           claim_id: claim_id,
           summary: Keyword.fetch!(attrs, :summary),
           direction: Keyword.get(attrs, :direction, :inconclusive),
@@ -537,10 +550,21 @@ defmodule Vaos.Ledger.Epistemic.Ledger do
       new_state =
         state
         |> put_in([:evidence, evidence.id], evidence)
-        |> update_in([:claims, claim_id, :evidence_ids], fn ids -> [evidence.id | ids] end)
+        |> then(fn s ->
+
+          c = Map.get(s.claims, claim_id)
+
+          c = %{c | evidence_ids: [evidence.id | c.evidence_ids]}
+
+          %{s | claims: Map.put(s.claims, claim_id, c)}
+
+        end)
         |> persist()
 
-      {:reply, evidence, new_state}
+        {:reply, evidence, new_state}
+
+      {:error, _} = error ->
+        {:reply, error, state}
     end
   end
 
@@ -548,9 +572,10 @@ defmodule Vaos.Ledger.Epistemic.Ledger do
   def handle_call({:add_attack, attrs}, _from, state) do
     claim_id = Keyword.fetch!(attrs, :claim_id)
 
-    with {:ok, _claim} <- fetch_claim(state, claim_id) do
-      attack =
-        Models.Attack.new(
+    case fetch_claim(state, claim_id) do
+      {:ok, _claim} ->
+        attack =
+          Models.Attack.new(
           claim_id: claim_id,
           description: Keyword.fetch!(attrs, :description),
           target_kind: Keyword.get(attrs, :target_kind, "claim"),
@@ -565,10 +590,21 @@ defmodule Vaos.Ledger.Epistemic.Ledger do
       new_state =
         state
         |> put_in([:attacks, attack.id], attack)
-        |> update_in([:claims, claim_id, :attack_ids], fn ids -> [attack.id | ids] end)
+        |> then(fn s ->
+
+          c = Map.get(s.claims, claim_id)
+
+          c = %{c | attack_ids: [attack.id | c.attack_ids]}
+
+          %{s | claims: Map.put(s.claims, claim_id, c)}
+
+        end)
         |> persist()
 
-      {:reply, attack, new_state}
+        {:reply, attack, new_state}
+
+      {:error, _} = error ->
+        {:reply, error, state}
     end
   end
 
@@ -576,9 +612,10 @@ defmodule Vaos.Ledger.Epistemic.Ledger do
   def handle_call({:add_artifact, attrs}, _from, state) do
     claim_id = Keyword.fetch!(attrs, :claim_id)
 
-    with {:ok, _claim} <- fetch_claim(state, claim_id) do
-      artifact =
-        Models.Artifact.new(
+    case fetch_claim(state, claim_id) do
+      {:ok, _claim} ->
+        artifact =
+          Models.Artifact.new(
           claim_id: claim_id,
           kind: Keyword.fetch!(attrs, :kind),
           title: Keyword.fetch!(attrs, :title),
@@ -593,10 +630,21 @@ defmodule Vaos.Ledger.Epistemic.Ledger do
       new_state =
         state
         |> put_in([:artifacts, artifact.id], artifact)
-        |> update_in([:claims, claim_id, :artifact_ids], fn ids -> [artifact.id | ids] end)
+        |> then(fn s ->
+
+          c = Map.get(s.claims, claim_id)
+
+          c = %{c | artifact_ids: [artifact.id | c.artifact_ids]}
+
+          %{s | claims: Map.put(s.claims, claim_id, c)}
+
+        end)
         |> persist()
 
-      {:reply, artifact, new_state}
+        {:reply, artifact, new_state}
+
+      {:error, _} = error ->
+        {:reply, error, state}
     end
   end
 
@@ -624,8 +672,9 @@ defmodule Vaos.Ledger.Epistemic.Ledger do
   def handle_call({:add_hypothesis, attrs}, _from, state) do
     input_id = Keyword.fetch!(attrs, :input_id)
 
-    with {:ok, _input} <- fetch_input(state, input_id) do
-      hypothesis =
+    case fetch_input(state, input_id) do
+      {:ok, _input} ->
+        hypothesis =
         Models.InnovationHypothesis.new(
           input_id: input_id,
           title: Keyword.fetch!(attrs, :title),
@@ -653,8 +702,11 @@ defmodule Vaos.Ledger.Epistemic.Ledger do
           id: Keyword.get(attrs, :id)
         )
 
-      new_state = put_in(state.hypotheses[hypothesis.id], hypothesis) |> persist()
-      {:reply, hypothesis, new_state}
+        new_state = put_in(state.hypotheses[hypothesis.id], hypothesis) |> persist()
+        {:reply, hypothesis, new_state}
+
+      {:error, _} = error ->
+        {:reply, error, state}
     end
   end
 
@@ -690,6 +742,8 @@ defmodule Vaos.Ledger.Epistemic.Ledger do
         new_state = put_in(state.protocols[protocol.id], protocol) |> persist()
         {:reply, protocol, new_state}
       end
+    else
+      {:error, _} = error -> {:reply, error, state}
     end
   end
 
@@ -697,9 +751,10 @@ defmodule Vaos.Ledger.Epistemic.Ledger do
   def handle_call({:register_target, attrs}, _from, state) do
     claim_id = Keyword.fetch!(attrs, :claim_id)
 
-    with {:ok, _claim} <- fetch_claim(state, claim_id) do
-      target =
-        Models.ArtifactTarget.new(
+    case fetch_claim(state, claim_id) do
+      {:ok, _claim} ->
+        target =
+          Models.ArtifactTarget.new(
           claim_id: claim_id,
           mode: Keyword.fetch!(attrs, :mode),
           target_type: Keyword.fetch!(attrs, :target_type),
@@ -717,10 +772,21 @@ defmodule Vaos.Ledger.Epistemic.Ledger do
       new_state =
         state
         |> put_in([:targets, target.id], target)
-        |> update_in([:claims, claim_id, :target_ids], fn ids -> [target.id | ids] end)
+        |> then(fn s ->
+
+          c = Map.get(s.claims, claim_id)
+
+          c = %{c | target_ids: [target.id | c.target_ids]}
+
+          %{s | claims: Map.put(s.claims, claim_id, c)}
+
+        end)
         |> persist()
 
-      {:reply, target, new_state}
+        {:reply, target, new_state}
+
+      {:error, _} = error ->
+        {:reply, error, state}
     end
   end
 
@@ -749,10 +815,20 @@ defmodule Vaos.Ledger.Epistemic.Ledger do
       new_state =
         state
         |> put_in([:eval_suites, suite.id], suite)
-        |> update_in([:claims, claim_id, :eval_suite_ids], fn ids -> [suite.id | ids] end)
+        |> then(fn s ->
+
+          c = Map.get(s.claims, claim_id)
+
+          c = %{c | eval_suite_ids: [suite.id | c.eval_suite_ids]}
+
+          %{s | claims: Map.put(s.claims, claim_id, c)}
+
+        end)
         |> persist()
 
       {:reply, suite, new_state}
+    else
+      {:error, _} = error -> {:reply, error, state}
     end
   end
 
@@ -783,10 +859,20 @@ defmodule Vaos.Ledger.Epistemic.Ledger do
       new_state =
         state
         |> put_in([:mutation_candidates, candidate.id], candidate)
-        |> update_in([:claims, claim_id, :mutation_candidate_ids], fn ids -> [candidate.id | ids] end)
+        |> then(fn s ->
+
+          c = Map.get(s.claims, claim_id)
+
+          c = %{c | mutation_candidate_ids: [candidate.id | c.mutation_candidate_ids]}
+
+          %{s | claims: Map.put(s.claims, claim_id, c)}
+
+        end)
         |> persist()
 
       {:reply, candidate, new_state}
+    else
+      {:error, _} = error -> {:reply, error, state}
     end
   end
 
@@ -822,10 +908,20 @@ defmodule Vaos.Ledger.Epistemic.Ledger do
       new_state =
         state
         |> put_in([:eval_runs, eval_run.id], eval_run)
-        |> update_in([:claims, claim_id, :eval_run_ids], fn ids -> [eval_run.id | ids] end)
+        |> then(fn s ->
+
+          c = Map.get(s.claims, claim_id)
+
+          c = %{c | eval_run_ids: [eval_run.id | c.eval_run_ids]}
+
+          %{s | claims: Map.put(s.claims, claim_id, c)}
+
+        end)
         |> persist()
 
       {:reply, eval_run, new_state}
+    else
+      {:error, _} = error -> {:reply, error, state}
     end
   end
 
@@ -844,6 +940,8 @@ defmodule Vaos.Ledger.Epistemic.Ledger do
         |> persist()
 
       {:reply, updated_target, new_state}
+    else
+      {:error, _} = error -> {:reply, error, state}
     end
   end
 
@@ -853,8 +951,9 @@ defmodule Vaos.Ledger.Epistemic.Ledger do
     kind = Keyword.fetch!(attrs, :kind)
     source_path = Keyword.get(attrs, :source_path, "")
 
-    with {:ok, _claim} <- fetch_claim(state, claim_id) do
-      existing =
+    case fetch_claim(state, claim_id) do
+      {:ok, _claim} ->
+        existing =
         artifacts_for_claim(state, claim_id)
         |> Enum.find(fn a -> a.kind == kind and a.source_path == source_path end)
 
@@ -892,176 +991,240 @@ defmodule Vaos.Ledger.Epistemic.Ledger do
           new_state =
             state
             |> put_in([:artifacts, artifact.id], artifact)
-            |> update_in([:claims, claim_id, :artifact_ids], fn ids -> [artifact.id | ids] end)
+            |> then(fn s ->
+
+              c = Map.get(s.claims, claim_id)
+
+              c = %{c | artifact_ids: [artifact.id | c.artifact_ids]}
+
+              %{s | claims: Map.put(s.claims, claim_id, c)}
+
+            end)
             |> persist()
 
           {:reply, artifact, new_state}
         end
 
-      result
+        result
+
+      {:error, _} = error ->
+        {:reply, error, state}
     end
   end
 
   # Implement remaining handle_call clauses for getters and list operations
   @impl true
   def handle_call({:assumptions_for_claim, claim_id}, _from, state) do
-    with {:ok, claim} <- fetch_claim(state, claim_id) do
+    case fetch_claim(state, claim_id) do
+      {:ok, claim} ->
       result =
         claim.assumption_ids
         |> Enum.map(&Map.get(state.assumptions, &1))
         |> Enum.reject(&is_nil/1)
 
       {:reply, result, state}
+
+      {:error, _} = error ->
+        {:reply, error, state}
     end
   end
 
   @impl true
   def handle_call({:evidence_for_claim, claim_id}, _from, state) do
-    with {:ok, claim} <- fetch_claim(state, claim_id) do
+    case fetch_claim(state, claim_id) do
+      {:ok, claim} ->
       result =
         claim.evidence_ids
         |> Enum.map(&Map.get(state.evidence, &1))
         |> Enum.reject(&is_nil/1)
 
       {:reply, result, state}
+
+      {:error, _} = error ->
+        {:reply, error, state}
     end
   end
 
   @impl true
   def handle_call({:attacks_for_claim, claim_id}, _from, state) do
-    with {:ok, claim} <- fetch_claim(state, claim_id) do
+    case fetch_claim(state, claim_id) do
+      {:ok, claim} ->
       result =
         claim.attack_ids
         |> Enum.map(&Map.get(state.attacks, &1))
         |> Enum.reject(&is_nil/1)
 
       {:reply, result, state}
+
+      {:error, _} = error ->
+        {:reply, error, state}
     end
   end
 
   @impl true
   def handle_call({:artifacts_for_claim, claim_id}, _from, state) do
-    with {:ok, claim} <- fetch_claim(state, claim_id) do
+    case fetch_claim(state, claim_id) do
+      {:ok, claim} ->
       result =
         claim.artifact_ids
         |> Enum.map(&Map.get(state.artifacts, &1))
         |> Enum.reject(&is_nil/1)
 
       {:reply, result, state}
+
+      {:error, _} = error ->
+        {:reply, error, state}
     end
   end
 
   @impl true
   def handle_call({:inputs_for_claim, claim_id}, _from, state) do
-    with {:ok, claim} <- fetch_claim(state, claim_id) do
+    case fetch_claim(state, claim_id) do
+      {:ok, claim} ->
       result =
         claim.input_ids
         |> Enum.map(&Map.get(state.inputs, &1))
         |> Enum.reject(&is_nil/1)
 
       {:reply, result, state}
+
+      {:error, _} = error ->
+        {:reply, error, state}
     end
   end
 
   @impl true
   def handle_call({:hypotheses_for_claim, claim_id}, _from, state) do
-    with {:ok, claim} <- fetch_claim(state, claim_id) do
+    case fetch_claim(state, claim_id) do
+      {:ok, claim} ->
       result =
         claim.hypothesis_ids
         |> Enum.map(&Map.get(state.hypotheses, &1))
         |> Enum.reject(&is_nil/1)
 
       {:reply, result, state}
+
+      {:error, _} = error ->
+        {:reply, error, state}
     end
   end
 
   @impl true
   def handle_call({:protocols_for_claim, claim_id}, _from, state) do
-    with {:ok, claim} <- fetch_claim(state, claim_id) do
+    case fetch_claim(state, claim_id) do
+      {:ok, claim} ->
       result =
         claim.protocol_ids
         |> Enum.map(&Map.get(state.protocols, &1))
         |> Enum.reject(&is_nil/1)
 
       {:reply, result, state}
+
+      {:error, _} = error ->
+        {:reply, error, state}
     end
   end
 
   @impl true
   def handle_call({:targets_for_claim, claim_id}, _from, state) do
-    with {:ok, claim} <- fetch_claim(state, claim_id) do
+    case fetch_claim(state, claim_id) do
+      {:ok, claim} ->
       result =
         claim.target_ids
         |> Enum.map(&Map.get(state.targets, &1))
         |> Enum.reject(&is_nil/1)
 
       {:reply, result, state}
+
+      {:error, _} = error ->
+        {:reply, error, state}
     end
   end
 
   @impl true
   def handle_call({:eval_suites_for_claim, claim_id}, _from, state) do
-    with {:ok, claim} <- fetch_claim(state, claim_id) do
+    case fetch_claim(state, claim_id) do
+      {:ok, claim} ->
       result =
         claim.eval_suite_ids
         |> Enum.map(&Map.get(state.eval_suites, &1))
         |> Enum.reject(&is_nil/1)
 
       {:reply, result, state}
+
+      {:error, _} = error ->
+        {:reply, error, state}
     end
   end
 
   @impl true
   def handle_call({:mutation_candidates_for_claim, claim_id}, _from, state) do
-    with {:ok, claim} <- fetch_claim(state, claim_id) do
+    case fetch_claim(state, claim_id) do
+      {:ok, claim} ->
       result =
         claim.mutation_candidate_ids
         |> Enum.map(&Map.get(state.mutation_candidates, &1))
         |> Enum.reject(&is_nil/1)
 
       {:reply, result, state}
+
+      {:error, _} = error ->
+        {:reply, error, state}
     end
   end
 
   @impl true
   def handle_call({:eval_runs_for_claim, claim_id}, _from, state) do
-    with {:ok, claim} <- fetch_claim(state, claim_id) do
+    case fetch_claim(state, claim_id) do
+      {:ok, claim} ->
       result =
         claim.eval_run_ids
         |> Enum.map(&Map.get(state.eval_runs, &1))
         |> Enum.reject(&is_nil/1)
 
       {:reply, result, state}
+
+      {:error, _} = error ->
+        {:reply, error, state}
     end
   end
 
   @impl true
   def handle_call({:decisions_for_claim, claim_id}, _from, state) do
-    with {:ok, claim} <- fetch_claim(state, claim_id) do
+    case fetch_claim(state, claim_id) do
+      {:ok, claim} ->
       result =
         claim.decision_ids
         |> Enum.map(&Map.get(state.decisions, &1))
         |> Enum.reject(&is_nil/1)
 
       {:reply, result, state}
+
+      {:error, _} = error ->
+        {:reply, error, state}
     end
   end
 
   @impl true
   def handle_call({:executions_for_claim, claim_id}, _from, state) do
-    with {:ok, claim} <- fetch_claim(state, claim_id) do
+    case fetch_claim(state, claim_id) do
+      {:ok, claim} ->
       result =
         claim.execution_ids
         |> Enum.map(&Map.get(state.executions, &1))
         |> Enum.reject(&is_nil/1)
 
       {:reply, result, state}
+
+      {:error, _} = error ->
+        {:reply, error, state}
     end
   end
 
   @impl true
   def handle_call({:hypotheses_for_input, input_id}, _from, state) do
-    with {:ok, _input} <- fetch_input(state, input_id) do
+    case fetch_input(state, input_id) do
+      {:ok, _input} ->
       result =
         state.hypotheses
         |> Map.values()
@@ -1069,12 +1232,16 @@ defmodule Vaos.Ledger.Epistemic.Ledger do
         |> Enum.sort_by(& &1.created_at)
 
       {:reply, result, state}
+
+      {:error, _} = error ->
+        {:reply, error, state}
     end
   end
 
   @impl true
   def handle_call({:protocols_for_input, input_id}, _from, state) do
-    with {:ok, _input} <- fetch_input(state, input_id) do
+    case fetch_input(state, input_id) do
+      {:ok, _input} ->
       result =
         state.protocols
         |> Map.values()
@@ -1082,12 +1249,16 @@ defmodule Vaos.Ledger.Epistemic.Ledger do
         |> Enum.sort_by(& &1.created_at)
 
       {:reply, result, state}
+
+      {:error, _} = error ->
+        {:reply, error, state}
     end
   end
 
   @impl true
   def handle_call({:protocols_for_hypothesis, hypothesis_id}, _from, state) do
-    with {:ok, _hypothesis} <- fetch_hypothesis(state, hypothesis_id) do
+    case fetch_hypothesis(state, hypothesis_id) do
+      {:ok, _hypothesis} ->
       result =
         state.protocols
         |> Map.values()
@@ -1095,6 +1266,9 @@ defmodule Vaos.Ledger.Epistemic.Ledger do
         |> Enum.sort_by(& &1.created_at)
 
       {:reply, result, state}
+
+      {:error, _} = error ->
+        {:reply, error, state}
     end
   end
 
@@ -1227,7 +1401,7 @@ defmodule Vaos.Ledger.Epistemic.Ledger do
       |> put_in([:decisions, record.id], record)
       |> then(fn s ->
         if Map.has_key?(s.claims, record.claim_id) do
-          update_in(s, [:claims, record.claim_id, :decision_ids], fn ids -> [record.id | ids] end)
+          update_claim_field(s, record.claim_id, :decision_ids, record.id)
         else
           s
         end
@@ -1262,8 +1436,17 @@ defmodule Vaos.Ledger.Epistemic.Ledger do
         }
       end
 
-    with {:ok, _claim} <- fetch_claim(state, claim_id) do
-      final_claim_title = if claim_title == "", do: get_in(state, [:claims, claim_id, :title]), else: claim_title
+    case fetch_claim(state, claim_id) do
+      {:ok, _claim} ->
+        final_claim_title =
+        if claim_title == "" do
+          case Map.get(state.claims, claim_id) do
+            nil -> ""
+            c -> c.title
+          end
+        else
+          claim_title
+        end
 
       record =
         Models.ExecutionRecord.new(
@@ -1286,10 +1469,21 @@ defmodule Vaos.Ledger.Epistemic.Ledger do
       new_state =
         state
         |> put_in([:executions, record.id], record)
-        |> update_in([:claims, claim_id, :execution_ids], fn ids -> [record.id | ids] end)
+        |> then(fn s ->
+
+          c = Map.get(s.claims, claim_id)
+
+          c = %{c | execution_ids: [record.id | c.execution_ids]}
+
+          %{s | claims: Map.put(s.claims, claim_id, c)}
+
+        end)
         |> persist()
 
-      {:reply, record, new_state}
+        {:reply, record, new_state}
+
+      {:error, _} = error ->
+        {:reply, error, state}
     end
   end
 
@@ -1306,10 +1500,20 @@ defmodule Vaos.Ledger.Epistemic.Ledger do
       new_state =
         state
         |> put_in([:hypotheses, hypothesis_id], updated_hypothesis)
-        |> update_in([:claims, claim_id, :hypothesis_ids], fn ids -> [hypothesis_id | ids] end)
+        |> then(fn s ->
+
+          c = Map.get(s.claims, claim_id)
+
+          c = %{c | hypothesis_ids: [hypothesis_id | c.hypothesis_ids]}
+
+          %{s | claims: Map.put(s.claims, claim_id, c)}
+
+        end)
         |> persist()
 
       {:reply, updated_hypothesis, new_state}
+    else
+      {:error, _} = error -> {:reply, error, state}
     end
   end
 
@@ -1329,10 +1533,20 @@ defmodule Vaos.Ledger.Epistemic.Ledger do
       new_state =
         state
         |> put_in([:inputs, input_id], updated_input)
-        |> update_in([:claims, claim_id, :input_ids], fn ids -> [input_id | ids] end)
+        |> then(fn s ->
+
+          c = Map.get(s.claims, claim_id)
+
+          c = %{c | input_ids: [input_id | c.input_ids]}
+
+          %{s | claims: Map.put(s.claims, claim_id, c)}
+
+        end)
         |> persist()
 
       {:reply, updated_input, new_state}
+    else
+      {:error, _} = error -> {:reply, error, state}
     end
   end
 
@@ -1349,31 +1563,39 @@ defmodule Vaos.Ledger.Epistemic.Ledger do
       new_state =
         state
         |> put_in([:protocols, protocol_id], updated_protocol)
-        |> update_in([:claims, claim_id, :protocol_ids], fn ids -> [protocol_id | ids] end)
+        |> then(fn s ->
+
+          c = Map.get(s.claims, claim_id)
+
+          c = %{c | protocol_ids: [protocol_id | c.protocol_ids]}
+
+          %{s | claims: Map.put(s.claims, claim_id, c)}
+
+        end)
         |> persist()
 
       {:reply, updated_protocol, new_state}
+    else
+      {:error, _} = error -> {:reply, error, state}
     end
   end
 
   @impl true
   def handle_call(:refresh_all, _from, state) do
-    new_state =
-      state
-      |> rebuild_indexes()
-      |> Enum.reduce(state, fn {claim_id, _claim}, acc ->
-        refresh_claim_in_state(acc, claim_id)
-      end)
-
+    new_state = refresh_all_in_state(state)
     {:reply, :ok, new_state}
   end
 
   @impl true
   def handle_call({:refresh_claim, claim_id}, _from, state) do
-    with {:ok, _claim} <- fetch_claim(state, claim_id) do
-      new_state = refresh_claim_in_state(state, claim_id)
-      metrics = claim_metrics(new_state, claim_id)
-      {:reply, metrics, new_state}
+    case fetch_claim(state, claim_id) do
+      {:ok, _claim} ->
+        new_state = refresh_claim_in_state(state, claim_id)
+        metrics = claim_metrics(new_state, claim_id)
+        {:reply, metrics, new_state}
+
+      {:error, _} = error ->
+        {:reply, error, state}
     end
   end
 
@@ -1384,6 +1606,12 @@ defmodule Vaos.Ledger.Epistemic.Ledger do
   end
 
   # Helper functions
+
+
+  # Safely round a number, converting integers to float first
+  defp safe_round(value, decimals) when is_float(value), do: Float.round(value, decimals)
+  defp safe_round(value, decimals) when is_integer(value), do: Float.round(value * 1.0, decimals)
+  defp safe_round(value, _decimals), do: value
 
   defp load_or_init(path) do
     if File.exists?(path) do
@@ -1840,170 +2068,94 @@ defmodule Vaos.Ledger.Epistemic.Ledger do
   defp rebuild_indexes(state) do
     # Clear all claim indexes
     state =
-      Enum.reduce(state.claims, state, fn {_id, claim}, acc ->
-        acc
-        |> put_in([:claims, claim.id, :assumption_ids], [])
-        |> put_in([:claims, claim.id, :evidence_ids], [])
-        |> put_in([:claims, claim.id, :attack_ids], [])
-        |> put_in([:claims, claim.id, :artifact_ids], [])
-        |> put_in([:claims, claim.id, :input_ids], [])
-        |> put_in([:claims, claim.id, :hypothesis_ids], [])
-        |> put_in([:claims, claim.id, :protocol_ids], [])
-        |> put_in([:claims, claim.id, :target_ids], [])
-        |> put_in([:claims, claim.id, :eval_suite_ids], [])
-        |> put_in([:claims, claim.id, :mutation_candidate_ids], [])
-        |> put_in([:claims, claim.id, :eval_run_ids], [])
-        |> put_in([:claims, claim.id, :decision_ids], [])
-        |> put_in([:claims, claim.id, :execution_ids], [])
+      Enum.reduce(state.claims, state, fn {id, claim}, acc ->
+        cleared = %{claim |
+          assumption_ids: [],
+          evidence_ids: [],
+          attack_ids: [],
+          artifact_ids: [],
+          input_ids: [],
+          hypothesis_ids: [],
+          protocol_ids: [],
+          target_ids: [],
+          eval_suite_ids: [],
+          mutation_candidate_ids: [],
+          eval_run_ids: [],
+          decision_ids: [],
+          execution_ids: []
+        }
+        %{acc | claims: Map.put(acc.claims, id, cleared)}
       end)
 
-    # Rebuild indexes
-    state =
-      Enum.reduce(state.assumptions, state, fn {_id, assumption}, acc ->
-        if Map.has_key?(acc.claims, assumption.claim_id) do
-          update_in(acc, [:claims, assumption.claim_id, :assumption_ids], fn ids ->
-            [assumption.id | ids]
-          end)
-        else
-          acc
-        end
-      end)
+    # Rebuild indexes - use struct update syntax instead of update_in/Access
+    state = Enum.reduce(state.assumptions, state, fn {_id, assumption}, acc ->
+      update_claim_field(acc, assumption.claim_id, :assumption_ids, assumption.id)
+    end)
 
-    state =
-      Enum.reduce(state.evidence, state, fn {_id, evidence}, acc ->
-        if Map.has_key?(acc.claims, evidence.claim_id) do
-          update_in(acc, [:claims, evidence.claim_id, :evidence_ids], fn ids ->
-            [evidence.id | ids]
-          end)
-        else
-          acc
-        end
-      end)
+    state = Enum.reduce(state.evidence, state, fn {_id, evidence}, acc ->
+      update_claim_field(acc, evidence.claim_id, :evidence_ids, evidence.id)
+    end)
 
-    state =
-      Enum.reduce(state.attacks, state, fn {_id, attack}, acc ->
-        if Map.has_key?(acc.claims, attack.claim_id) do
-          update_in(acc, [:claims, attack.claim_id, :attack_ids], fn ids -> [attack.id | ids] end)
-        else
-          acc
-        end
-      end)
+    state = Enum.reduce(state.attacks, state, fn {_id, attack}, acc ->
+      update_claim_field(acc, attack.claim_id, :attack_ids, attack.id)
+    end)
 
-    state =
-      Enum.reduce(state.artifacts, state, fn {_id, artifact}, acc ->
-        if Map.has_key?(acc.claims, artifact.claim_id) do
-          update_in(acc, [:claims, artifact.claim_id, :artifact_ids], fn ids ->
-            [artifact.id | ids]
-          end)
-        else
-          acc
-        end
-      end)
+    state = Enum.reduce(state.artifacts, state, fn {_id, artifact}, acc ->
+      update_claim_field(acc, artifact.claim_id, :artifact_ids, artifact.id)
+    end)
 
-    state =
-      Enum.reduce(state.inputs, state, fn {_id, input}, acc ->
-        Enum.reduce(input.linked_claim_ids, acc, fn claim_id, inner_acc ->
-          if Map.has_key?(inner_acc.claims, claim_id) do
-            update_in(inner_acc, [:claims, claim_id, :input_ids], fn ids -> [input.id | ids] end)
-          else
-            inner_acc
-          end
-        end)
+    state = Enum.reduce(state.inputs, state, fn {_id, input}, acc ->
+      Enum.reduce(input.linked_claim_ids, acc, fn claim_id, inner_acc ->
+        update_claim_field(inner_acc, claim_id, :input_ids, input.id)
       end)
+    end)
 
-    state =
-      Enum.reduce(state.hypotheses, state, fn {_id, hypothesis}, acc ->
-        if Map.has_key?(acc.claims, hypothesis.materialized_claim_id) do
-          update_in(acc, [:claims, hypothesis.materialized_claim_id, :hypothesis_ids], fn ids ->
-            [hypothesis.id | ids]
-          end)
-        else
-          acc
-        end
-      end)
+    state = Enum.reduce(state.hypotheses, state, fn {_id, hypothesis}, acc ->
+      update_claim_field(acc, hypothesis.materialized_claim_id, :hypothesis_ids, hypothesis.id)
+    end)
 
-    state =
-      Enum.reduce(state.protocols, state, fn {_id, protocol}, acc ->
-        if Map.has_key?(acc.claims, protocol.materialized_claim_id) do
-          update_in(acc, [:claims, protocol.materialized_claim_id, :protocol_ids], fn ids ->
-            [protocol.id | ids]
-          end)
-        else
-          acc
-        end
-      end)
+    state = Enum.reduce(state.protocols, state, fn {_id, protocol}, acc ->
+      update_claim_field(acc, protocol.materialized_claim_id, :protocol_ids, protocol.id)
+    end)
 
-    state =
-      Enum.reduce(state.targets, state, fn {_id, target}, acc ->
-        if Map.has_key?(acc.claims, target.claim_id) do
-          update_in(acc, [:claims, target.claim_id, :target_ids], fn ids -> [target.id | ids] end)
-        else
-          acc
-        end
-      end)
+    state = Enum.reduce(state.targets, state, fn {_id, target}, acc ->
+      update_claim_field(acc, target.claim_id, :target_ids, target.id)
+    end)
 
-    state =
-      Enum.reduce(state.eval_suites, state, fn {_id, suite}, acc ->
-        if Map.has_key?(acc.claims, suite.claim_id) do
-          update_in(acc, [:claims, suite.claim_id, :eval_suite_ids], fn ids ->
-            [suite.id | ids]
-          end)
-        else
-          acc
-        end
-      end)
+    state = Enum.reduce(state.eval_suites, state, fn {_id, suite}, acc ->
+      update_claim_field(acc, suite.claim_id, :eval_suite_ids, suite.id)
+    end)
 
-    state =
-      Enum.reduce(state.mutation_candidates, state, fn {_id, candidate}, acc ->
-        if Map.has_key?(acc.claims, candidate.claim_id) do
-          update_in(acc, [:claims, candidate.claim_id, :mutation_candidate_ids], fn ids ->
-            [candidate.id | ids]
-          end)
-        else
-          acc
-        end
-      end)
+    state = Enum.reduce(state.mutation_candidates, state, fn {_id, candidate}, acc ->
+      update_claim_field(acc, candidate.claim_id, :mutation_candidate_ids, candidate.id)
+    end)
 
-    state =
-      Enum.reduce(state.eval_runs, state, fn {_id, eval_run}, acc ->
-        if Map.has_key?(acc.claims, eval_run.claim_id) do
-          update_in(acc, [:claims, eval_run.claim_id, :eval_run_ids], fn ids ->
-            [eval_run.id | ids]
-          end)
-        else
-          acc
-        end
-      end)
+    state = Enum.reduce(state.eval_runs, state, fn {_id, eval_run}, acc ->
+      update_claim_field(acc, eval_run.claim_id, :eval_run_ids, eval_run.id)
+    end)
 
-    state =
-      Enum.reduce(state.decisions, state, fn {_id, decision}, acc ->
-        if Map.has_key?(acc.claims, decision.claim_id) do
-          update_in(acc, [:claims, decision.claim_id, :decision_ids], fn ids ->
-            [decision.id | ids]
-          end)
-        else
-          acc
-        end
-      end)
+    state = Enum.reduce(state.decisions, state, fn {_id, decision}, acc ->
+      update_claim_field(acc, decision.claim_id, :decision_ids, decision.id)
+    end)
 
-    state =
-      Enum.reduce(state.executions, state, fn {_id, execution}, acc ->
-        if Map.has_key?(acc.claims, execution.claim_id) do
-          update_in(acc, [:claims, execution.claim_id, :execution_ids], fn ids ->
-            [execution.id | ids]
-          end)
-        else
-          acc
-        end
-      end)
+    Enum.reduce(state.executions, state, fn {_id, execution}, acc ->
+      update_claim_field(acc, execution.claim_id, :execution_ids, execution.id)
+    end)
+  end
 
-    state
+  # Helper to safely prepend an ID to a claim's list field without Access behaviour
+  defp update_claim_field(state, claim_id, field, new_id) do
+    case Map.get(state.claims, claim_id) do
+      nil -> state
+      claim ->
+        updated = Map.update!(claim, field, fn ids -> [new_id | ids] end)
+        %{state | claims: Map.put(state.claims, claim_id, updated)}
+    end
   end
 
   defp refresh_all_in_state(state) do
-    state
-    |> rebuild_indexes()
-    |> Enum.reduce(state, fn {claim_id, _claim}, acc ->
+    state = rebuild_indexes(state)
+    Enum.reduce(state.claims, state, fn {claim_id, _claim}, acc ->
       refresh_claim_in_state(acc, claim_id)
     end)
   end
@@ -2011,8 +2163,10 @@ defmodule Vaos.Ledger.Epistemic.Ledger do
   defp refresh_claim_in_state(state, claim_id) do
     metrics = claim_metrics(state, claim_id)
 
-    state
-    |> update_in([:claims, claim_id], fn claim ->
+    claim = Map.get(state.claims, claim_id)
+    if is_nil(claim) do
+      state
+    else
       updated_status =
         if claim.status != :archived do
           derive_status(claim, metrics)
@@ -2020,11 +2174,14 @@ defmodule Vaos.Ledger.Epistemic.Ledger do
           claim.status
         end
 
-      claim
-      |> Map.put(:status, updated_status)
-      |> Map.put(:confidence, metrics["belief"])
-      |> Map.put(:updated_at, Models.utc_now())
-    end)
+      updated_claim =
+        claim
+        |> Map.put(:status, updated_status)
+        |> Map.put(:confidence, metrics["belief"])
+        |> Map.put(:updated_at, Models.utc_now())
+
+      %{state | claims: Map.put(state.claims, claim_id, updated_claim)}
+    end
   end
 
   # Claim metrics calculation - extracted from Python version
@@ -2219,7 +2376,7 @@ defmodule Vaos.Ledger.Epistemic.Ledger do
 
       threshold_met = Enum.any?(eval_suites, fn suite -> best_candidate_score >= suite.pass_threshold end)
 
-      promoted_candidate_count = Enum.count(targets, &(&1.promoted_candidate_id != ""))
+      promoted_candidate_count = Enum.count(targets, &(&1.promoted_candidate_id != "" and not is_nil(&1.promoted_candidate_id)))
 
       # Execution metrics
       total_runtime_seconds = Enum.sum(Enum.map(executions, &(&1.runtime_seconds || 0.0)))
@@ -2237,7 +2394,7 @@ defmodule Vaos.Ledger.Epistemic.Ledger do
         |> Enum.sum()
 
       known_artifact_qualities =
-        Enum.filter(executions, &not is_nil(&1.artifact_quality))
+        Enum.filter(executions, &(not is_nil(&1.artifact_quality)))
         |> Enum.map(& &1.artifact_quality)
 
       average_artifact_quality =
@@ -2248,15 +2405,15 @@ defmodule Vaos.Ledger.Epistemic.Ledger do
         end
 
       %{
-        "belief" => Float.round(belief, 6),
-        "uncertainty" => Float.round(uncertainty, 6),
-        "support_score" => Float.round(support_score, 6),
-        "contradict_score" => Float.round(contradict_score, 6),
-        "inconclusive_score" => Float.round(inconclusive_score, 6),
-        "evidence_weight" => Float.round(evidence_weight, 6),
+        "belief" => safe_round(belief, 6),
+        "uncertainty" => safe_round(uncertainty, 6),
+        "support_score" => safe_round(support_score, 6),
+        "contradict_score" => safe_round(contradict_score, 6),
+        "inconclusive_score" => safe_round(inconclusive_score, 6),
+        "evidence_weight" => safe_round(evidence_weight, 6),
         "evidence_count" => length(evidence),
         "open_attack_count" => length(open_attacks),
-        "open_attack_load" => Float.round(open_attack_load, 6),
+        "open_attack_load" => safe_round(open_attack_load, 6),
         "artifact_count" => length(artifacts),
         "input_count" => length(inputs),
         "hypothesis_count" => length(hypotheses),
@@ -2275,37 +2432,37 @@ defmodule Vaos.Ledger.Epistemic.Ledger do
           Enum.count(mutation_candidates, &(&1.review_status == :approved)),
         "promoted_candidate_count" => promoted_candidate_count,
         "optimization_best_candidate_id" => best_candidate_id,
-        "optimization_best_score" => Float.round(best_candidate_score, 6),
-        "optimization_average_pass_rate" => Float.round(candidate_average_pass_rate, 6),
+        "optimization_best_score" => safe_round(best_candidate_score, 6),
+        "optimization_average_pass_rate" => safe_round(candidate_average_pass_rate, 6),
         "optimization_threshold_met" => threshold_met,
         "optimization_stagnation_candidate_count" => stagnation_candidate_count,
-        "assumption_risk" => Float.round(average_assumption_risk, 6),
+        "assumption_risk" => safe_round(average_assumption_risk, 6),
         "decision_count" => length(decisions),
         "execution_count" => length(executions),
         "failed_execution_count" => Enum.count(executions, &(&1.status == :failed)),
         "successful_execution_count" => Enum.count(executions, &(&1.status == :succeeded)),
-        "total_runtime_seconds" => Float.round(total_runtime_seconds, 3),
-        "failed_runtime_seconds" => Float.round(failed_runtime_seconds, 3),
-        "total_cost_usd" => Float.round(total_cost_usd, 6),
-        "failed_cost_usd" => Float.round(failed_cost_usd, 6),
-        "average_artifact_quality" => Float.round(average_artifact_quality, 6),
+        "total_runtime_seconds" => safe_round(total_runtime_seconds, 3),
+        "failed_runtime_seconds" => safe_round(failed_runtime_seconds, 3),
+        "total_cost_usd" => safe_round(total_cost_usd, 6),
+        "failed_cost_usd" => safe_round(failed_cost_usd, 6),
+        "average_artifact_quality" => safe_round(average_artifact_quality, 6),
         "highest_risk_assumption_id" =>
           (if highest_risk_assumption, do: highest_risk_assumption.id, else: ""),
         "highest_risk_assumption_risk" =>
-          Float.round((if highest_risk_assumption, do: highest_risk_assumption.risk, else: 0.0), 6),
+          safe_round((if highest_risk_assumption, do: highest_risk_assumption.risk, else: 0.0), 6),
         "autoresearch_series_run_count" => Map.get(autoresearch_series, "total_runs", 0),
         "autoresearch_series_keep_rate" =>
-          Float.round(Map.get(autoresearch_series, "keep_rate", 0.0), 6),
+          safe_round(Map.get(autoresearch_series, "keep_rate", 0.0), 6),
         "autoresearch_series_crash_rate" =>
-          Float.round(Map.get(autoresearch_series, "crash_rate", 0.0), 6),
+          safe_round(Map.get(autoresearch_series, "crash_rate", 0.0), 6),
         "autoresearch_series_frontier_improvement_count" =>
           Map.get(autoresearch_series, "frontier_improvement_count", 0),
         "autoresearch_series_stagnation_run_count" =>
           Map.get(autoresearch_series, "stagnation_run_count", 0),
         "autoresearch_series_best_improvement_bpb" =>
-          Float.round(Map.get(autoresearch_series, "best_improvement_bpb", 0.0), 6),
+          safe_round(Map.get(autoresearch_series, "best_improvement_bpb", 0.0), 6),
         "autoresearch_series_average_memory_gb" =>
-          Float.round(Map.get(autoresearch_series, "average_memory_gb", 0.0), 3),
+          safe_round(Map.get(autoresearch_series, "average_memory_gb", 0.0), 3),
         "autoresearch_branch_count" => Map.get(autoresearch_aggregate, "branch_count", 0),
         "autoresearch_active_branch_count" =>
           Map.get(autoresearch_aggregate, "active_branch_count", 0),
@@ -2315,9 +2472,9 @@ defmodule Vaos.Ledger.Epistemic.Ledger do
           Map.get(autoresearch_aggregate, "total_runs", 0),
         "autoresearch_best_branch" => Map.get(autoresearch_aggregate, "preferred_branch", "") |> String.trim(),
         "autoresearch_aggregate_keep_rate" =>
-          Float.round(Map.get(autoresearch_aggregate, "keep_rate", 0.0), 6),
+          safe_round(Map.get(autoresearch_aggregate, "keep_rate", 0.0), 6),
         "autoresearch_aggregate_crash_rate" =>
-          Float.round(Map.get(autoresearch_aggregate, "crash_rate", 0.0), 6)
+          safe_round(Map.get(autoresearch_aggregate, "crash_rate", 0.0), 6)
       }
     end
   end

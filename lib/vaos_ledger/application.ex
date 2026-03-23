@@ -7,16 +7,16 @@ defmodule VaosLedger.Application do
 
   @impl true
   def start(_type, _args) do
-    # Default ledger path
-    ledger_path = Application.get_env(:vaos_ledger, :ledger_path, "ledger.json")
+    children =
+      if Mix.env() == :test do
+        # In test mode, don't auto-start the Ledger GenServer.
+        # Each test module starts its own instance.
+        []
+      else
+        ledger_path = Application.get_env(:vaos_ledger, :ledger_path, "ledger.json")
+        [{Vaos.Ledger.Epistemic.Ledger, path: ledger_path}]
+      end
 
-    children = [
-      # Ledger GenServer
-      {Vaos.Ledger.Epistemic.Ledger, path: ledger_path}
-    ]
-
-    # See https://hexdocs.pm/elixir/Supervisor.html
-    # for other strategies and supported options
     opts = [strategy: :one_for_one, name: VaosLedger.Supervisor]
     Supervisor.start_link(children, opts)
   end

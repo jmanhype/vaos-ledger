@@ -39,6 +39,7 @@ defmodule Vaos.Ledger.Epistemic.Models do
 
     def new(attrs) do
       now = Vaos.Ledger.Epistemic.Models.utc_now()
+      attrs = Keyword.reject(attrs, fn {_k, v} -> is_nil(v) end)
       id = attrs[:id] || "claim_" <> Base.encode16(:crypto.strong_rand_bytes(8), case: :lower)
       defaults = [id: id, created_at: now, updated_at: now, status: :proposed,
                   novelty: 0.5, falsifiability: 0.5, confidence: 0.0]
@@ -57,6 +58,7 @@ defmodule Vaos.Ledger.Epistemic.Models do
 
     def new(attrs) do
       now = Vaos.Ledger.Epistemic.Models.utc_now()
+      attrs = Keyword.reject(attrs, fn {_k, v} -> is_nil(v) end)
       id = attrs[:id] || "assum_" <> Base.encode16(:crypto.strong_rand_bytes(8), case: :lower)
       struct!(__MODULE__, Keyword.merge([id: id, created_at: now, risk: 0.5, rationale: ""], attrs))
     end
@@ -72,6 +74,7 @@ defmodule Vaos.Ledger.Epistemic.Models do
 
     def new(attrs) do
       now = Vaos.Ledger.Epistemic.Models.utc_now()
+      attrs = Keyword.reject(attrs, fn {_k, v} -> is_nil(v) end)
       id = attrs[:id] || "evid_" <> Base.encode16(:crypto.strong_rand_bytes(8), case: :lower)
       struct!(__MODULE__, Keyword.merge([id: id, created_at: now, direction: :inconclusive,
                                         strength: 0.5, confidence: 0.5], attrs))
@@ -87,6 +90,7 @@ defmodule Vaos.Ledger.Epistemic.Models do
 
     def new(attrs) do
       now = Vaos.Ledger.Epistemic.Models.utc_now()
+      attrs = Keyword.reject(attrs, fn {_k, v} -> is_nil(v) end)
       id = attrs[:id] || "atk_" <> Base.encode16(:crypto.strong_rand_bytes(8), case: :lower)
       struct!(__MODULE__, Keyword.merge([id: id, created_at: now, status: :open], attrs))
     end
@@ -101,6 +105,7 @@ defmodule Vaos.Ledger.Epistemic.Models do
 
     def new(attrs) do
       now = Vaos.Ledger.Epistemic.Models.utc_now()
+      attrs = Keyword.reject(attrs, fn {_k, v} -> is_nil(v) end)
       id = attrs[:id] || "artif_" <> Base.encode16(:crypto.strong_rand_bytes(8), case: :lower)
       struct!(__MODULE__, Keyword.merge([id: id, created_at: now, updated_at: now, kind: :method], attrs))
     end
@@ -116,6 +121,7 @@ defmodule Vaos.Ledger.Epistemic.Models do
 
     def new(attrs) do
       now = Vaos.Ledger.Epistemic.Models.utc_now()
+      attrs = Keyword.reject(attrs, fn {_k, v} -> is_nil(v) end)
       id = attrs[:id] || "input_" <> Base.encode16(:crypto.strong_rand_bytes(8), case: :lower)
       struct!(__MODULE__, Keyword.merge([id: id, created_at: now, updated_at: now], attrs))
     end
@@ -134,6 +140,7 @@ defmodule Vaos.Ledger.Epistemic.Models do
 
     def new(attrs) do
       now = Vaos.Ledger.Epistemic.Models.utc_now()
+      attrs = Keyword.reject(attrs, fn {_k, v} -> is_nil(v) end)
       id = attrs[:id] || "hyp_" <> Base.encode16(:crypto.strong_rand_bytes(8), case: :lower)
       struct!(__MODULE__, Keyword.merge([id: id, created_at: now, updated_at: now, status: :proposed], attrs))
     end
@@ -151,6 +158,7 @@ defmodule Vaos.Ledger.Epistemic.Models do
 
     def new(attrs) do
       now = Vaos.Ledger.Epistemic.Models.utc_now()
+      attrs = Keyword.reject(attrs, fn {_k, v} -> is_nil(v) end)
       id = attrs[:id] || "proto_" <> Base.encode16(:crypto.strong_rand_bytes(8), case: :lower)
       struct!(__MODULE__, Keyword.merge([id: id, created_at: now, updated_at: now, status: :draft], attrs))
     end
@@ -166,6 +174,7 @@ defmodule Vaos.Ledger.Epistemic.Models do
 
     def new(attrs) do
       now = Vaos.Ledger.Epistemic.Models.utc_now()
+      attrs = Keyword.reject(attrs, fn {_k, v} -> is_nil(v) end)
       id = attrs[:id] || "tgt_" <> Base.encode16(:crypto.strong_rand_bytes(8), case: :lower)
       struct!(__MODULE__, Keyword.merge([id: id, created_at: now, updated_at: now], attrs))
     end
@@ -181,6 +190,7 @@ defmodule Vaos.Ledger.Epistemic.Models do
 
     def new(attrs) do
       now = Vaos.Ledger.Epistemic.Models.utc_now()
+      attrs = Keyword.reject(attrs, fn {_k, v} -> is_nil(v) end)
       id = attrs[:id] || "suite_" <> Base.encode16(:crypto.strong_rand_bytes(8), case: :lower)
       struct!(__MODULE__, Keyword.merge([id: id, created_at: now, updated_at: now], attrs))
     end
@@ -196,6 +206,7 @@ defmodule Vaos.Ledger.Epistemic.Models do
 
     def new(attrs) do
       now = Vaos.Ledger.Epistemic.Models.utc_now()
+      attrs = Keyword.reject(attrs, fn {_k, v} -> is_nil(v) end)
       id = attrs[:id] || "cand_" <> Base.encode16(:crypto.strong_rand_bytes(8), case: :lower)
       struct!(__MODULE__, Keyword.merge([id: id, created_at: now, updated_at: now, review_status: :pending], attrs))
     end
@@ -211,6 +222,7 @@ defmodule Vaos.Ledger.Epistemic.Models do
 
     def new(attrs) do
       now = Vaos.Ledger.Epistemic.Models.utc_now()
+      attrs = Keyword.reject(attrs, fn {_k, v} -> is_nil(v) end)
       id = attrs[:id] || "run_" <> Base.encode16(:crypto.strong_rand_bytes(8), case: :lower)
       struct!(__MODULE__, Keyword.merge([id: id, created_at: now], attrs))
     end
@@ -226,6 +238,7 @@ defmodule Vaos.Ledger.Epistemic.Models do
 
     def new(attrs) do
       now = Vaos.Ledger.Epistemic.Models.utc_now()
+      attrs = Keyword.reject(attrs, fn {_k, v} -> is_nil(v) end)
       id = attrs[:id] || "dec_" <> Base.encode16(:crypto.strong_rand_bytes(8), case: :lower)
       struct!(__MODULE__, Keyword.merge([id: id, created_at: now], attrs))
     end
@@ -241,6 +254,7 @@ defmodule Vaos.Ledger.Epistemic.Models do
 
     def new(attrs) do
       now = Vaos.Ledger.Epistemic.Models.utc_now()
+      attrs = Keyword.reject(attrs, fn {_k, v} -> is_nil(v) end)
       id = attrs[:id] || "exec_" <> Base.encode16(:crypto.strong_rand_bytes(8), case: :lower)
       struct!(__MODULE__, Keyword.merge([id: id, created_at: now, status: :running], attrs))
     end
@@ -254,6 +268,7 @@ defmodule Vaos.Ledger.Epistemic.Models do
     ]
 
     def new(attrs) do
+      attrs = Keyword.reject(attrs, fn {_k, v} -> is_nil(v) end)
       struct!(__MODULE__, Keyword.merge([executor: :manual, mode: "ml_research"], attrs))
     end
   end

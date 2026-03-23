@@ -73,8 +73,8 @@ defmodule VaosLedger do
   defdelegate rank_actions(ledger, opts), to: Vaos.Ledger.Epistemic.Policy
 
   # Experiment modules
-  defdelegate meets_threshold?(score, opts), to: Vaos.Ledger.Experiment.Verdict
-  defdelegate keep_candidate?(score, baseline, opts), to: Vaos.Ledger.Experiment.Verdict
+  defdelegate meets_threshold?(best_score, baseline_score), to: Vaos.Ledger.Experiment.Verdict
+  defdelegate keep_candidate?(candidate, best_score, baseline_score), to: Vaos.Ledger.Experiment.Verdict
   defdelegate improvement(score, baseline), to: Vaos.Ledger.Experiment.Verdict
   defdelegate format_verdict(verdict, score, baseline), to: Vaos.Ledger.Experiment.Verdict
 
@@ -87,7 +87,7 @@ defmodule VaosLedger do
 
   defdelegate load(), to: Vaos.Ledger.Experiment.Strategy
   defdelegate load(path), to: Vaos.Ledger.Experiment.Strategy
-  defdelegate save(path, strategy), to: Vaos.Ledger.Experiment.Strategy
+  defdelegate save(strategy, path), to: Vaos.Ledger.Experiment.Strategy
   defdelegate evolve(strategy, metrics), to: Vaos.Ledger.Experiment.Strategy
   defdelegate get_hyperparameter(strategy, key), to: Vaos.Ledger.Experiment.Strategy
   defdelegate get_hyperparameter(strategy, key, default), to: Vaos.Ledger.Experiment.Strategy
