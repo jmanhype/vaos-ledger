@@ -27,328 +27,328 @@ defmodule Vaos.Ledger.Epistemic.Ledger do
   @doc """
   Stop the ledger server.
   """
-  def stop do
-    GenServer.stop(__MODULE__)
+  def stop(server \\ __MODULE__) do
+    GenServer.stop(server)
   end
 
   @doc """
   Get the ledger state (for testing/debugging).
   """
-  def state do
-    GenServer.call(__MODULE__, :state)
+  def state(server \\ __MODULE__) do
+    GenServer.call(server, :state)
   end
 
   @doc """
   Save the ledger to disk.
   """
-  def save do
-    GenServer.call(__MODULE__, :save)
+  def save(server \\ __MODULE__) do
+    GenServer.call(server, :save)
   end
 
   @doc """
   List all claims.
   """
-  def list_claims do
-    GenServer.call(__MODULE__, :list_claims)
+  def list_claims(server \\ __MODULE__) do
+    GenServer.call(server, :list_claims)
   end
 
   @doc """
   Get a claim by ID.
   """
-  def get_claim(claim_id) do
-    GenServer.call(__MODULE__, {:get_claim, claim_id})
+  def get_claim(claim_id, server \\ __MODULE__) do
+    GenServer.call(server, {:get_claim, claim_id})
   end
 
   @doc """
   Get a claim snapshot with all related entities.
   """
-  def claim_snapshot(claim_id) do
-    GenServer.call(__MODULE__, {:claim_snapshot, claim_id})
+  def claim_snapshot(claim_id, server \\ __MODULE__) do
+    GenServer.call(server, {:claim_snapshot, claim_id})
   end
 
   @doc """
   Get summary rows for all claims.
   """
-  def summary_rows do
-    GenServer.call(__MODULE__, :summary_rows)
+  def summary_rows(server \\ __MODULE__) do
+    GenServer.call(server, :summary_rows)
   end
 
   @doc """
   Add a new claim.
   """
-  def add_claim(attrs) do
-    GenServer.call(__MODULE__, {:add_claim, attrs})
+  def add_claim(attrs, server \\ __MODULE__) do
+    GenServer.call(server, {:add_claim, attrs})
   end
 
   @doc """
   Add an assumption to a claim.
   """
-  def add_assumption(attrs) do
-    GenServer.call(__MODULE__, {:add_assumption, attrs})
+  def add_assumption(attrs, server \\ __MODULE__) do
+    GenServer.call(server, {:add_assumption, attrs})
   end
 
   @doc """
   Add evidence to a claim.
   """
-  def add_evidence(attrs) do
-    GenServer.call(__MODULE__, {:add_evidence, attrs})
+  def add_evidence(attrs, server \\ __MODULE__) do
+    GenServer.call(server, {:add_evidence, attrs})
   end
 
   @doc """
   Add an attack to a claim.
   """
-  def add_attack(attrs) do
-    GenServer.call(__MODULE__, {:add_attack, attrs})
+  def add_attack(attrs, server \\ __MODULE__) do
+    GenServer.call(server, {:add_attack, attrs})
   end
 
   @doc """
   Add an artifact to a claim.
   """
-  def add_artifact(attrs) do
-    GenServer.call(__MODULE__, {:add_artifact, attrs})
+  def add_artifact(attrs, server \\ __MODULE__) do
+    GenServer.call(server, {:add_artifact, attrs})
   end
 
   @doc """
   Register an input artifact.
   """
-  def register_input(attrs) do
-    GenServer.call(__MODULE__, {:register_input, attrs})
+  def register_input(attrs, server \\ __MODULE__) do
+    GenServer.call(server, {:register_input, attrs})
   end
 
   @doc """
   Add a hypothesis.
   """
-  def add_hypothesis(attrs) do
-    GenServer.call(__MODULE__, {:add_hypothesis, attrs})
+  def add_hypothesis(attrs, server \\ __MODULE__) do
+    GenServer.call(server, {:add_hypothesis, attrs})
   end
 
   @doc """
   Add a protocol draft.
   """
-  def add_protocol_draft(attrs) do
-    GenServer.call(__MODULE__, {:add_protocol_draft, attrs})
+  def add_protocol_draft(attrs, server \\ __MODULE__) do
+    GenServer.call(server, {:add_protocol_draft, attrs})
   end
 
   @doc """
   Register a target for mutation.
   """
-  def register_target(attrs) do
-    GenServer.call(__MODULE__, {:register_target, attrs})
+  def register_target(attrs, server \\ __MODULE__) do
+    GenServer.call(server, {:register_target, attrs})
   end
 
   @doc """
   Register an evaluation suite.
   """
-  def register_eval_suite(attrs) do
-    GenServer.call(__MODULE__, {:register_eval_suite, attrs})
+  def register_eval_suite(attrs, server \\ __MODULE__) do
+    GenServer.call(server, {:register_eval_suite, attrs})
   end
 
   @doc """
   Add a mutation candidate.
   """
-  def add_mutation_candidate(attrs) do
-    GenServer.call(__MODULE__, {:add_mutation_candidate, attrs})
+  def add_mutation_candidate(attrs, server \\ __MODULE__) do
+    GenServer.call(server, {:add_mutation_candidate, attrs})
   end
 
   @doc """
   Record an evaluation run.
   """
-  def record_eval_run(attrs) do
-    GenServer.call(__MODULE__, {:record_eval_run, attrs})
+  def record_eval_run(attrs, server \\ __MODULE__) do
+    GenServer.call(server, {:record_eval_run, attrs})
   end
 
   @doc """
   Promote a candidate as the winner.
   """
-  def promote_candidate(target_id, candidate_id) do
-    GenServer.call(__MODULE__, {:promote_candidate, target_id, candidate_id})
+  def promote_candidate(target_id, candidate_id, server \\ __MODULE__) do
+    GenServer.call(server, {:promote_candidate, target_id, candidate_id})
   end
 
   @doc """
   Upsert an artifact (add or update).
   """
-  def upsert_artifact(attrs) do
-    GenServer.call(__MODULE__, {:upsert_artifact, attrs})
+  def upsert_artifact(attrs, server \\ __MODULE__) do
+    GenServer.call(server, {:upsert_artifact, attrs})
   end
 
   @doc """
   Get entities for a claim.
   """
-  def assumptions_for_claim(claim_id) do
-    GenServer.call(__MODULE__, {:assumptions_for_claim, claim_id})
+  def assumptions_for_claim(claim_id, server \\ __MODULE__) do
+    GenServer.call(server, {:assumptions_for_claim, claim_id})
   end
 
-  def evidence_for_claim(claim_id) do
-    GenServer.call(__MODULE__, {:evidence_for_claim, claim_id})
+  def evidence_for_claim(claim_id, server \\ __MODULE__) do
+    GenServer.call(server, {:evidence_for_claim, claim_id})
   end
 
-  def attacks_for_claim(claim_id) do
-    GenServer.call(__MODULE__, {:attacks_for_claim, claim_id})
+  def attacks_for_claim(claim_id, server \\ __MODULE__) do
+    GenServer.call(server, {:attacks_for_claim, claim_id})
   end
 
-  def artifacts_for_claim(claim_id) do
-    GenServer.call(__MODULE__, {:artifacts_for_claim, claim_id})
+  def artifacts_for_claim(claim_id, server \\ __MODULE__) do
+    GenServer.call(server, {:artifacts_for_claim, claim_id})
   end
 
-  def inputs_for_claim(claim_id) do
-    GenServer.call(__MODULE__, {:inputs_for_claim, claim_id})
+  def inputs_for_claim(claim_id, server \\ __MODULE__) do
+    GenServer.call(server, {:inputs_for_claim, claim_id})
   end
 
-  def hypotheses_for_claim(claim_id) do
-    GenServer.call(__MODULE__, {:hypotheses_for_claim, claim_id})
+  def hypotheses_for_claim(claim_id, server \\ __MODULE__) do
+    GenServer.call(server, {:hypotheses_for_claim, claim_id})
   end
 
-  def protocols_for_claim(claim_id) do
-    GenServer.call(__MODULE__, {:protocols_for_claim, claim_id})
+  def protocols_for_claim(claim_id, server \\ __MODULE__) do
+    GenServer.call(server, {:protocols_for_claim, claim_id})
   end
 
-  def targets_for_claim(claim_id) do
-    GenServer.call(__MODULE__, {:targets_for_claim, claim_id})
+  def targets_for_claim(claim_id, server \\ __MODULE__) do
+    GenServer.call(server, {:targets_for_claim, claim_id})
   end
 
-  def eval_suites_for_claim(claim_id) do
-    GenServer.call(__MODULE__, {:eval_suites_for_claim, claim_id})
+  def eval_suites_for_claim(claim_id, server \\ __MODULE__) do
+    GenServer.call(server, {:eval_suites_for_claim, claim_id})
   end
 
-  def mutation_candidates_for_claim(claim_id) do
-    GenServer.call(__MODULE__, {:mutation_candidates_for_claim, claim_id})
+  def mutation_candidates_for_claim(claim_id, server \\ __MODULE__) do
+    GenServer.call(server, {:mutation_candidates_for_claim, claim_id})
   end
 
-  def eval_runs_for_claim(claim_id) do
-    GenServer.call(__MODULE__, {:eval_runs_for_claim, claim_id})
+  def eval_runs_for_claim(claim_id, server \\ __MODULE__) do
+    GenServer.call(server, {:eval_runs_for_claim, claim_id})
   end
 
-  def decisions_for_claim(claim_id) do
-    GenServer.call(__MODULE__, {:decisions_for_claim, claim_id})
+  def decisions_for_claim(claim_id, server \\ __MODULE__) do
+    GenServer.call(server, {:decisions_for_claim, claim_id})
   end
 
-  def executions_for_claim(claim_id) do
-    GenServer.call(__MODULE__, {:executions_for_claim, claim_id})
+  def executions_for_claim(claim_id, server \\ __MODULE__) do
+    GenServer.call(server, {:executions_for_claim, claim_id})
   end
 
   @doc """
   Get entities by relations.
   """
-  def hypotheses_for_input(input_id) do
-    GenServer.call(__MODULE__, {:hypotheses_for_input, input_id})
+  def hypotheses_for_input(input_id, server \\ __MODULE__) do
+    GenServer.call(server, {:hypotheses_for_input, input_id})
   end
 
-  def protocols_for_input(input_id) do
-    GenServer.call(__MODULE__, {:protocols_for_input, input_id})
+  def protocols_for_input(input_id, server \\ __MODULE__) do
+    GenServer.call(server, {:protocols_for_input, input_id})
   end
 
-  def protocols_for_hypothesis(hypothesis_id) do
-    GenServer.call(__MODULE__, {:protocols_for_hypothesis, hypothesis_id})
+  def protocols_for_hypothesis(hypothesis_id, server \\ __MODULE__) do
+    GenServer.call(server, {:protocols_for_hypothesis, hypothesis_id})
   end
 
   @doc """
   Get individual entities.
   """
-  def get_input(input_id) do
-    GenServer.call(__MODULE__, {:get_input, input_id})
+  def get_input(input_id, server \\ __MODULE__) do
+    GenServer.call(server, {:get_input, input_id})
   end
 
-  def get_hypothesis(hypothesis_id) do
-    GenServer.call(__MODULE__, {:get_hypothesis, hypothesis_id})
+  def get_hypothesis(hypothesis_id, server \\ __MODULE__) do
+    GenServer.call(server, {:get_hypothesis, hypothesis_id})
   end
 
-  def get_protocol(protocol_id) do
-    GenServer.call(__MODULE__, {:get_protocol, protocol_id})
+  def get_protocol(protocol_id, server \\ __MODULE__) do
+    GenServer.call(server, {:get_protocol, protocol_id})
   end
 
-  def get_decision(decision_id) do
-    GenServer.call(__MODULE__, {:get_decision, decision_id})
+  def get_decision(decision_id, server \\ __MODULE__) do
+    GenServer.call(server, {:get_decision, decision_id})
   end
 
-  def get_target(target_id) do
-    GenServer.call(__MODULE__, {:get_target, target_id})
+  def get_target(target_id, server \\ __MODULE__) do
+    GenServer.call(server, {:get_target, target_id})
   end
 
-  def get_eval_suite(suite_id) do
-    GenServer.call(__MODULE__, {:get_eval_suite, suite_id})
+  def get_eval_suite(suite_id, server \\ __MODULE__) do
+    GenServer.call(server, {:get_eval_suite, suite_id})
   end
 
-  def get_mutation_candidate(candidate_id) do
-    GenServer.call(__MODULE__, {:get_mutation_candidate, candidate_id})
+  def get_mutation_candidate(candidate_id, server \\ __MODULE__) do
+    GenServer.call(server, {:get_mutation_candidate, candidate_id})
   end
 
   @doc """
   List entities.
   """
-  def list_decisions do
-    GenServer.call(__MODULE__, :list_decisions)
+  def list_decisions(server \\ __MODULE__) do
+    GenServer.call(server, :list_decisions)
   end
 
-  def list_executions do
-    GenServer.call(__MODULE__, :list_executions)
+  def list_executions(server \\ __MODULE__) do
+    GenServer.call(server, :list_executions)
   end
 
-  def list_inputs do
-    GenServer.call(__MODULE__, :list_inputs)
+  def list_inputs(server \\ __MODULE__) do
+    GenServer.call(server, :list_inputs)
   end
 
-  def list_hypotheses do
-    GenServer.call(__MODULE__, :list_hypotheses)
+  def list_hypotheses(server \\ __MODULE__) do
+    GenServer.call(server, :list_hypotheses)
   end
 
-  def list_protocols do
-    GenServer.call(__MODULE__, :list_protocols)
+  def list_protocols(server \\ __MODULE__) do
+    GenServer.call(server, :list_protocols)
   end
 
   @doc """
   Record a decision.
   """
-  def record_decision(proposal, opts \\ []) do
-    GenServer.call(__MODULE__, {:record_decision, proposal, opts})
+  def record_decision(proposal, opts \\ [], server \\ __MODULE__) do
+    GenServer.call(server, {:record_decision, proposal, opts})
   end
 
   @doc """
   Record an execution.
   """
-  def record_execution(attrs) do
-    GenServer.call(__MODULE__, {:record_execution, attrs})
+  def record_execution(attrs, server \\ __MODULE__) do
+    GenServer.call(server, {:record_execution, attrs})
   end
 
   @doc """
   Link a hypothesis to a claim.
   """
-  def link_hypothesis_to_claim(hypothesis_id, claim_id, status \\ :materialized) do
-    GenServer.call(__MODULE__, {:link_hypothesis_to_claim, hypothesis_id, claim_id, status})
+  def link_hypothesis_to_claim(hypothesis_id, claim_id, status \\ :materialized, server \\ __MODULE__) do
+    GenServer.call(server, {:link_hypothesis_to_claim, hypothesis_id, claim_id, status})
   end
 
   @doc """
   Link an input to a claim.
   """
-  def link_input_to_claim(input_id, claim_id) do
-    GenServer.call(__MODULE__, {:link_input_to_claim, input_id, claim_id})
+  def link_input_to_claim(input_id, claim_id, server \\ __MODULE__) do
+    GenServer.call(server, {:link_input_to_claim, input_id, claim_id})
   end
 
   @doc """
   Link a protocol to a claim.
   """
-  def link_protocol_to_claim(protocol_id, claim_id, status \\ :materialized) do
-    GenServer.call(__MODULE__, {:link_protocol_to_claim, protocol_id, claim_id, status})
+  def link_protocol_to_claim(protocol_id, claim_id, status \\ :materialized, server \\ __MODULE__) do
+    GenServer.call(server, {:link_protocol_to_claim, protocol_id, claim_id, status})
   end
 
   @doc """
   Refresh all claims.
   """
-  def refresh_all do
-    GenServer.call(__MODULE__, :refresh_all)
+  def refresh_all(server \\ __MODULE__) do
+    GenServer.call(server, :refresh_all)
   end
 
   @doc """
   Refresh a specific claim.
   """
-  def refresh_claim(claim_id) do
-    GenServer.call(__MODULE__, {:refresh_claim, claim_id})
+  def refresh_claim(claim_id, server \\ __MODULE__) do
+    GenServer.call(server, {:refresh_claim, claim_id})
   end
 
   @doc """
   Get claim metrics.
   """
-  def claim_metrics(claim_id) do
-    GenServer.call(__MODULE__, {:claim_metrics, claim_id})
+  def claim_metrics(claim_id, server \\ __MODULE__) do
+    GenServer.call(server, {:claim_metrics, claim_id})
   end
 
   # Server Callbacks
@@ -397,45 +397,45 @@ defmodule Vaos.Ledger.Epistemic.Ledger do
       claim ->
         snapshot = %{
           claim: Models.serialize_struct(claim),
-          metrics: claim_metrics(state, claim_id),
+          metrics: do_claim_metrics(state, claim_id),
           assumptions:
-            assumptions_for_claim(state, claim_id)
+            do_assumptions_for_claim(state, claim_id)
             |> Enum.map(&Models.serialize_struct/1),
           evidence:
-            evidence_for_claim(state, claim_id)
+            do_evidence_for_claim(state, claim_id)
             |> Enum.map(&Models.serialize_struct/1),
           attacks:
-            attacks_for_claim(state, claim_id)
+            do_attacks_for_claim(state, claim_id)
             |> Enum.map(&Models.serialize_struct/1),
           artifacts:
-            artifacts_for_claim(state, claim_id)
+            do_artifacts_for_claim(state, claim_id)
             |> Enum.map(&Models.serialize_struct/1),
           inputs:
-            inputs_for_claim(state, claim_id)
+            do_inputs_for_claim(state, claim_id)
             |> Enum.map(&Models.serialize_struct/1),
           hypotheses:
-            hypotheses_for_claim(state, claim_id)
+            do_hypotheses_for_claim(state, claim_id)
             |> Enum.map(&Models.serialize_struct/1),
           protocols:
-            protocols_for_claim(state, claim_id)
+            do_protocols_for_claim(state, claim_id)
             |> Enum.map(&Models.serialize_struct/1),
           targets:
-            targets_for_claim(state, claim_id)
+            do_targets_for_claim(state, claim_id)
             |> Enum.map(&Models.serialize_struct/1),
           eval_suites:
-            eval_suites_for_claim(state, claim_id)
+            do_eval_suites_for_claim(state, claim_id)
             |> Enum.map(&Models.serialize_struct/1),
           mutation_candidates:
-            mutation_candidates_for_claim(state, claim_id)
+            do_mutation_candidates_for_claim(state, claim_id)
             |> Enum.map(&Models.serialize_struct/1),
           eval_runs:
-            eval_runs_for_claim(state, claim_id)
+            do_eval_runs_for_claim(state, claim_id)
             |> Enum.map(&Models.serialize_struct/1),
           decisions:
-            decisions_for_claim(state, claim_id)
+            do_decisions_for_claim(state, claim_id)
             |> Enum.map(&Models.serialize_struct/1),
           executions:
-            executions_for_claim(state, claim_id)
+            do_executions_for_claim(state, claim_id)
             |> Enum.map(&Models.serialize_struct/1)
         }
 
@@ -450,7 +450,7 @@ defmodule Vaos.Ledger.Epistemic.Ledger do
       |> Map.values()
       |> Enum.sort_by(& &1.created_at)
       |> Enum.map(fn claim ->
-        metrics = claim_metrics(state, claim.id)
+        metrics = do_claim_metrics(state, claim.id)
 
         %{
           claim_id: claim.id,
@@ -966,7 +966,7 @@ defmodule Vaos.Ledger.Epistemic.Ledger do
     case fetch_claim(state, claim_id) do
       {:ok, _claim} ->
         existing =
-        artifacts_for_claim(state, claim_id)
+        do_artifacts_for_claim(state, claim_id)
         |> Enum.find(fn a -> a.kind == kind and a.source_path == source_path end)
 
       result =
@@ -1613,7 +1613,7 @@ defmodule Vaos.Ledger.Epistemic.Ledger do
 
   @impl true
   def handle_call({:claim_metrics, claim_id}, _from, state) do
-    metrics = claim_metrics(state, claim_id)
+    metrics = do_claim_metrics(state, claim_id)
     {:reply, metrics, state}
   end
 
@@ -2173,7 +2173,7 @@ defmodule Vaos.Ledger.Epistemic.Ledger do
   end
 
   defp refresh_claim_in_state(state, claim_id) do
-    metrics = claim_metrics(state, claim_id)
+    metrics = do_claim_metrics(state, claim_id)
 
     claim = Map.get(state.claims, claim_id)
     if is_nil(claim) do
@@ -2197,7 +2197,7 @@ defmodule Vaos.Ledger.Epistemic.Ledger do
   end
 
   # Claim metrics calculation - extracted from Python version
-  defp claim_metrics(state, claim_id) do
+  defp do_claim_metrics(state, claim_id) do
     claim = get_in(state, [:claims, claim_id])
 
     if is_nil(claim) do
@@ -2258,19 +2258,19 @@ defmodule Vaos.Ledger.Epistemic.Ledger do
         "autoresearch_aggregate_crash_rate" => 0.0
       }
     else
-      assumptions = assumptions_for_claim(state, claim_id)
-      evidence = evidence_for_claim(state, claim_id)
-      attacks = attacks_for_claim(state, claim_id)
-      artifacts = artifacts_for_claim(state, claim_id)
-      inputs = inputs_for_claim(state, claim_id)
-      hypotheses = hypotheses_for_claim(state, claim_id)
-      protocols = protocols_for_claim(state, claim_id)
-      targets = targets_for_claim(state, claim_id)
-      eval_suites = eval_suites_for_claim(state, claim_id)
-      mutation_candidates = mutation_candidates_for_claim(state, claim_id)
-      eval_runs = eval_runs_for_claim(state, claim_id)
-      decisions = decisions_for_claim(state, claim_id)
-      executions = executions_for_claim(state, claim_id)
+      assumptions = do_assumptions_for_claim(state, claim_id)
+      evidence = do_evidence_for_claim(state, claim_id)
+      attacks = do_attacks_for_claim(state, claim_id)
+      artifacts = do_artifacts_for_claim(state, claim_id)
+      inputs = do_inputs_for_claim(state, claim_id)
+      hypotheses = do_hypotheses_for_claim(state, claim_id)
+      protocols = do_protocols_for_claim(state, claim_id)
+      targets = do_targets_for_claim(state, claim_id)
+      eval_suites = do_eval_suites_for_claim(state, claim_id)
+      mutation_candidates = do_mutation_candidates_for_claim(state, claim_id)
+      eval_runs = do_eval_runs_for_claim(state, claim_id)
+      decisions = do_decisions_for_claim(state, claim_id)
+      executions = do_executions_for_claim(state, claim_id)
 
       autoresearch_meta = Map.get(claim.metadata, "autoresearch", %{})
       autoresearch_series = Map.get(autoresearch_meta, "series", %{})
@@ -2575,7 +2575,7 @@ defmodule Vaos.Ledger.Epistemic.Ledger do
   end
 
 
-  defp assumptions_for_claim(state, claim_id) do
+  defp do_assumptions_for_claim(state, claim_id) do
     case fetch_claim(state, claim_id) do
       {:ok, claim} ->
         claim.assumption_ids
@@ -2585,7 +2585,7 @@ defmodule Vaos.Ledger.Epistemic.Ledger do
     end
   end
 
-  defp evidence_for_claim(state, claim_id) do
+  defp do_evidence_for_claim(state, claim_id) do
     case fetch_claim(state, claim_id) do
       {:ok, claim} ->
         claim.evidence_ids
@@ -2595,7 +2595,7 @@ defmodule Vaos.Ledger.Epistemic.Ledger do
     end
   end
 
-  defp attacks_for_claim(state, claim_id) do
+  defp do_attacks_for_claim(state, claim_id) do
     case fetch_claim(state, claim_id) do
       {:ok, claim} ->
         claim.attack_ids
@@ -2605,7 +2605,7 @@ defmodule Vaos.Ledger.Epistemic.Ledger do
     end
   end
 
-  defp artifacts_for_claim(state, claim_id) do
+  defp do_artifacts_for_claim(state, claim_id) do
     case fetch_claim(state, claim_id) do
       {:ok, claim} ->
         claim.artifact_ids
@@ -2615,7 +2615,7 @@ defmodule Vaos.Ledger.Epistemic.Ledger do
     end
   end
 
-  defp inputs_for_claim(state, claim_id) do
+  defp do_inputs_for_claim(state, claim_id) do
     case fetch_claim(state, claim_id) do
       {:ok, claim} ->
         claim.input_ids
@@ -2625,7 +2625,7 @@ defmodule Vaos.Ledger.Epistemic.Ledger do
     end
   end
 
-  defp hypotheses_for_claim(state, claim_id) do
+  defp do_hypotheses_for_claim(state, claim_id) do
     case fetch_claim(state, claim_id) do
       {:ok, claim} ->
         claim.hypothesis_ids
@@ -2635,7 +2635,7 @@ defmodule Vaos.Ledger.Epistemic.Ledger do
     end
   end
 
-  defp protocols_for_claim(state, claim_id) do
+  defp do_protocols_for_claim(state, claim_id) do
     case fetch_claim(state, claim_id) do
       {:ok, claim} ->
         claim.protocol_ids
@@ -2645,7 +2645,7 @@ defmodule Vaos.Ledger.Epistemic.Ledger do
     end
   end
 
-  defp targets_for_claim(state, claim_id) do
+  defp do_targets_for_claim(state, claim_id) do
     case fetch_claim(state, claim_id) do
       {:ok, claim} ->
         claim.target_ids
@@ -2655,7 +2655,7 @@ defmodule Vaos.Ledger.Epistemic.Ledger do
     end
   end
 
-  defp eval_suites_for_claim(state, claim_id) do
+  defp do_eval_suites_for_claim(state, claim_id) do
     case fetch_claim(state, claim_id) do
       {:ok, claim} ->
         claim.eval_suite_ids
@@ -2665,7 +2665,7 @@ defmodule Vaos.Ledger.Epistemic.Ledger do
     end
   end
 
-  defp mutation_candidates_for_claim(state, claim_id) do
+  defp do_mutation_candidates_for_claim(state, claim_id) do
     case fetch_claim(state, claim_id) do
       {:ok, claim} ->
         claim.mutation_candidate_ids
@@ -2675,7 +2675,7 @@ defmodule Vaos.Ledger.Epistemic.Ledger do
     end
   end
 
-  defp eval_runs_for_claim(state, claim_id) do
+  defp do_eval_runs_for_claim(state, claim_id) do
     case fetch_claim(state, claim_id) do
       {:ok, claim} ->
         claim.eval_run_ids
@@ -2685,7 +2685,7 @@ defmodule Vaos.Ledger.Epistemic.Ledger do
     end
   end
 
-  defp decisions_for_claim(state, claim_id) do
+  defp do_decisions_for_claim(state, claim_id) do
     case fetch_claim(state, claim_id) do
       {:ok, claim} ->
         claim.decision_ids
@@ -2695,7 +2695,7 @@ defmodule Vaos.Ledger.Epistemic.Ledger do
     end
   end
 
-  defp executions_for_claim(state, claim_id) do
+  defp do_executions_for_claim(state, claim_id) do
     case fetch_claim(state, claim_id) do
       {:ok, claim} ->
         claim.execution_ids
