@@ -1603,7 +1603,7 @@ defmodule Vaos.Ledger.Epistemic.Ledger do
     case fetch_claim(state, claim_id) do
       {:ok, _claim} ->
         new_state = refresh_claim_in_state(state, claim_id)
-        metrics = claim_metrics(new_state, claim_id)
+        metrics = do_claim_metrics(new_state, claim_id)
         {:reply, metrics, new_state}
 
       {:error, _} = error ->
