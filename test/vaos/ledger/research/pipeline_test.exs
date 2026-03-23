@@ -81,8 +81,15 @@ defmodule Vaos.Ledger.Research.PipelineTest do
   end
 
   describe "run/1" do
-    test "runs full pipeline" do
-      {:ok, state} = Pipeline.run(ledger: Ledger, max_iterations: 5)
+    test "runs full pipeline with callbacks" do
+      llm_fn = fn _prompt -> {:ok, "TITLE: Test\n\nIDEA: Test idea\n\nRATIONALE: Test"} end
+
+      {:ok, state} = Pipeline.run(
+        ledger: Ledger,
+        llm_fn: llm_fn,
+        input: "Test research topic",
+        max_iterations: 5
+      )
       assert state.status == :completed
       assert state.iteration > 0
     end
