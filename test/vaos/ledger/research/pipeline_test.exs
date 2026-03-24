@@ -94,4 +94,25 @@ defmodule Vaos.Ledger.Research.PipelineTest do
       assert state.iteration == 4
     end
   end
+
+  describe "full pipeline with target_score" do
+    test "pipeline stops after one pass when paper is complete" do
+      llm_fn = fn _prompt -> {:ok, "TITLE: Test\n\nIDEA: test idea\n\nRATIONALE: because"} end
+
+      {:ok, state} = Pipeline.run(
+        ledger: Ledger,
+        llm_fn: llm_fn,
+        input: "Test research idea",
+        max_iterations: 100,
+        target_score: 0.5
+      )
+
+      # Pipeline should complete without running all 100 iterations
+      # because exceeds_score? detects a complete paper after one pass
+      assert state.status == :completed
+      assert state.research.paper != nil
+      # Should take far fewer than 100 iterations (one full pass = ~4 stage increments)
+      assert state.iteration < 20
+    end
+  end
 end

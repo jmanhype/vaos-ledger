@@ -111,4 +111,36 @@ defmodule Vaos.Ledger.Experiment.ScorerTest do
       assert score_fast > score_slow
     end
   end
+
+  describe "cache behavior" do
+    test "second call returns :cached for same result" do
+      if :ets.whereis(:scorer_cache) != :undefined do
+        :ets.delete_all_objects(:scorer_cache)
+      end
+
+      result = %{
+        execution_record: Models.ExecutionRecord.new(status: :succeeded, runtime_seconds: 5.0),
+        eval_runs: [],
+        content: "cache_test_unique_content_#{:rand.uniform(999999)}"
+      }
+
+      {status1, score1} = Scorer.score_result(result, fast: true, use_cache: true)
+      assert status1 == :computed
+
+      {status2, score2} = Scorer.score_result(result, fast: true, use_cache: true)
+      assert status2 == :cached
+      assert score1 == score2
+    end
+
+    test "cache is bypassed with use_cache: false" do
+      result = %{
+        execution_record: Models.ExecutionRecord.new(status: :succeeded, runtime_seconds: 5.0),
+        eval_runs: [],
+        content: "no_cache_test_#{:rand.uniform(999999)}"
+      }
+
+      {status, _} = Scorer.score_result(result, fast: true, use_cache: false)
+      assert status == :computed
+    end
+  end
 end

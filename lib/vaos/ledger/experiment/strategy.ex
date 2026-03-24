@@ -208,11 +208,11 @@ defmodule Vaos.Ledger.Experiment.Strategy do
       case Regex.run(~r/^- (.+?):\s+(.+)$/, String.trim(line)) do
         [_, key, value] ->
           parsed_value =
-            case Float.parse(value) do
-              {f, ""} -> f
+            case Integer.parse(value) do
+              {i, ""} -> i
               _ ->
-                case Integer.parse(value) do
-                  {i, ""} -> i
+                case Float.parse(value) do
+                  {f, ""} -> f
                   _ ->
                     case value do
                       "true" -> true
@@ -251,7 +251,8 @@ defmodule Vaos.Ledger.Experiment.Strategy do
     Enum.map_join(hyperparams, "\n", fn {key, value} -> "- #{key}: #{format_value(value)}" end)
   end
 
-  defp format_value(value) when is_number(value) do
+  defp format_value(value) when is_integer(value), do: Integer.to_string(value)
+  defp format_value(value) when is_float(value) do
     :erlang.float_to_binary(value * 1.0, decimals: 4)
   end
 

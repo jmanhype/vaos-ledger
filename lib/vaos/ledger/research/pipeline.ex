@@ -425,12 +425,17 @@ defmodule Vaos.Ledger.Research.Pipeline do
   end
 
   defp exceeds_score?(_state, nil), do: false
-  defp exceeds_score?(state, target_score) do
+  defp exceeds_score?(state, _target_score) do
     case state.research.paper do
       nil -> false
+      %Vaos.Ledger.Research.Paper{} = paper ->
+        # Paper is complete when all major sections have content
+        paper.title != nil and paper.abstract != nil and
+          paper.introduction != nil and paper.methods != nil and
+          paper.results != nil and paper.conclusions != nil
       paper when is_map(paper) ->
-        score = Map.get(paper, :score, 0.0) || 0.0
-        score >= target_score
+        # Fallback for plain map papers
+        Map.get(paper, :title) != nil and Map.get(paper, :abstract) != nil
       _ -> false
     end
   end

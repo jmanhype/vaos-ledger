@@ -72,4 +72,41 @@ defmodule Vaos.Ledger.Experiment.StrategyTest do
       assert String.contains?(text, "Hyperparameters")
     end
   end
+
+  describe "save/load round-trip" do
+    test "preserves goals, constraints, and hyperparameters through save/load" do
+      dir = Path.join(System.tmp_dir!(), "strategy_roundtrip_#{:rand.uniform(999999)}")
+      File.mkdir_p!(dir)
+      {:ok, strategy} = Strategy.load(dir)
+
+      strategy = %{strategy | goals: ["Goal A", "Goal B"], constraints: ["Con 1", "Con 2"]}
+      strategy = Strategy.set_hyperparameter(strategy, "learning_rate", 0.05)
+      strategy = Strategy.set_hyperparameter(strategy, "batch_size", 64)
+      strategy = Strategy.set_hyperparameter(strategy, "iterations", 200)
+
+      {:ok, _path} = Strategy.save(strategy, dir)
+      {:ok, loaded} = Strategy.load(dir)
+
+      assert loaded.goals == ["Goal A", "Goal B"]
+      assert loaded.constraints == ["Con 1", "Con 2"]
+      assert Strategy.get_hyperparameter(loaded, "learning_rate") == 0.05
+      assert Strategy.get_hyperparameter(loaded, "batch_size") == 64
+      assert is_integer(Strategy.get_hyperparameter(loaded, "batch_size"))
+      assert Strategy.get_hyperparameter(loaded, "iterations") == 200
+      assert is_integer(Strategy.get_hyperparameter(loaded, "iterations"))
+
+      File.rm_rf!(dir)
+    end
+
+    test "evolution history survives round-trip" do
+      dir = Path.join(System.tmp_dir!(), "strategy_evol_#{:rand.uniform(999999)}")
+      File.mkdir_p!(dir)
+      {:ok, strategy} = Strategy.load(dir)
+      {:ok, evolved} = Strategy.evolve(strategy, %{score: 0.9, runtime: 3.0, best_score: 0.9, iteration: 1})
+      {:ok, _} = Strategy.save(evolved, dir)
+      {:ok, loaded} = Strategy.load(dir)
+      assert length(loaded.evolution_history) >= 1
+      File.rm_rf!(dir)
+    end
+  end
 end
