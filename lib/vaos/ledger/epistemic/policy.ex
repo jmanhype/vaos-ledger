@@ -39,11 +39,11 @@ defmodule Vaos.Ledger.Epistemic.Policy do
   end
 
   defp build_proposals_for_claim(claim, metrics, _ledger) do
-    uncertainty = metrics["uncertainty"]
-    attack_pressure = metrics["open_attack_load"]
-    support_signal = Models.clamp(metrics["support_score"])
-    contradict_signal = Models.clamp(metrics["contradict_score"])
-    evidence_count = metrics["evidence_count"]
+    uncertainty = metrics["uncertainty"] || 0.5
+    attack_pressure = metrics["open_attack_load"] || 0.0
+    support_signal = Models.clamp(metrics["support_score"] || 0.0)
+    contradict_signal = Models.clamp(metrics["contradict_score"] || 0.0)
+    evidence_count = metrics["evidence_count"] || 0
     series_failure_pressure = autoresearch_failure_pressure(metrics)
     series_momentum = autoresearch_momentum(metrics)
     series_plateau = autoresearch_plateau(metrics)

@@ -3,10 +3,15 @@ defmodule Vaos.Ledger.Epistemic.Models do
   Shared structs and utilities for the epistemic ledger system.
   """
 
+  require Logger
+
   @doc "Clamp a float to [0.0, 1.0]."
   def clamp(value) when is_float(value), do: min(1.0, max(0.0, value))
   def clamp(value) when is_integer(value), do: min(1.0, max(0.0, value / 1))
-  def clamp(_), do: 0.0
+  def clamp(value) do
+    Logger.warning("Models.clamp/1 received non-numeric value: #{inspect(value)}, defaulting to 0.0")
+    0.0
+  end
 
   @doc "Clamp a value to [min_val, max_val]."
   def clamp(value, min_val, max_val) when is_number(value), do: min(max_val, max(min_val, value * 1.0))

@@ -210,7 +210,11 @@ defmodule Vaos.Ledger.Experiment.Scorer do
 
   defp init_cache do
     if :ets.whereis(:scorer_cache) == :undefined do
-      :ets.new(:scorer_cache, [:set, :public, :named_table])
+      try do
+        :ets.new(:scorer_cache, [:set, :public, :named_table])
+      rescue
+        ArgumentError -> :ok
+      end
     end
 
     :ok

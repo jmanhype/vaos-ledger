@@ -1640,26 +1640,40 @@ defmodule Vaos.Ledger.Epistemic.Ledger do
 
   defp load_or_init(path) do
     if File.exists?(path) do
-      load_from_file(path)
+      try do
+        load_from_file(path)
+      rescue
+        e in [Jason.DecodeError, File.Error, MatchError, KeyError] ->
+          Logger.error("Failed to load ledger from #{path}: #{inspect(e)}. Starting with empty state.")
+          # Preserve the corrupted file for forensic analysis
+          corrupt_path = path <> ".corrupt.#{System.system_time(:second)}"
+          File.cp(path, corrupt_path)
+          Logger.warning("Corrupted ledger backed up to #{corrupt_path}")
+          empty_state(path)
+      end
     else
-      %{
-        path: path,
-        claims: %{},
-        assumptions: %{},
-        evidence: %{},
-        attacks: %{},
-        artifacts: %{},
-        inputs: %{},
-        hypotheses: %{},
-        protocols: %{},
-        targets: %{},
-        eval_suites: %{},
-        mutation_candidates: %{},
-        eval_runs: %{},
-        decisions: %{},
-        executions: %{}
-      }
+      empty_state(path)
     end
+  end
+
+  defp empty_state(path) do
+    %{
+      path: path,
+      claims: %{},
+      assumptions: %{},
+      evidence: %{},
+      attacks: %{},
+      artifacts: %{},
+      inputs: %{},
+      hypotheses: %{},
+      protocols: %{},
+      targets: %{},
+      eval_suites: %{},
+      mutation_candidates: %{},
+      eval_runs: %{},
+      decisions: %{},
+      executions: %{}
+    }
   end
 
   defp load_from_file(path) do
@@ -1808,10 +1822,22 @@ defmodule Vaos.Ledger.Epistemic.Ledger do
     }
 
     File.mkdir_p!(Path.dirname(state.path))
-    File.write!(state.path, Jason.encode!(payload, pretty: true) <> "\n")
+    tmp_path = state.path <> ".tmp"
+    File.write!(tmp_path, Jason.encode!(payload, pretty: true) <> "\n")
+    File.rename!(tmp_path, state.path)
 
     state
   end
+
+  # Safe atom conversion: tries existing atom first, falls back to String.to_atom
+  defp safe_to_atom(str) when is_binary(str) do
+    try do
+      String.to_existing_atom(str)
+    rescue
+      ArgumentError -> String.to_atom(str)
+    end
+  end
+  defp safe_to_atom(atom) when is_atom(atom), do: atom
 
   # Deserialization helpers
   defp deserialize_claim(raw) do
@@ -1819,7 +1845,7 @@ defmodule Vaos.Ledger.Epistemic.Ledger do
       id: raw["id"],
       title: raw["title"],
       statement: raw["statement"],
-      status: String.to_existing_atom(raw["status"] || "proposed"),
+      status: safe_to_atom(raw["status"] || "proposed"),
       novelty: raw["novelty"],
       falsifiability: raw["falsifiability"],
       confidence: raw["confidence"],
@@ -1861,7 +1887,7 @@ defmodule Vaos.Ledger.Epistemic.Ledger do
       id: raw["id"],
       claim_id: raw["claim_id"],
       summary: raw["summary"],
-      direction: String.to_existing_atom(raw["direction"] || "inconclusive"),
+      direction: safe_to_atom(raw["direction"] || "inconclusive"),
       strength: raw["strength"],
       confidence: raw["confidence"],
       source_type: raw["source_type"],
@@ -1880,7 +1906,7 @@ defmodule Vaos.Ledger.Epistemic.Ledger do
       target_kind: raw["target_kind"],
       target_id: raw["target_id"],
       severity: raw["severity"],
-      status: String.to_existing_atom(raw["status"] || "open"),
+      status: safe_to_atom(raw["status"] || "open"),
       created_at: raw["created_at"],
       resolution: raw["resolution"],
       metadata: raw["metadata"] || %{}
@@ -1891,7 +1917,7 @@ defmodule Vaos.Ledger.Epistemic.Ledger do
     Models.Artifact.new(
       id: raw["id"],
       claim_id: raw["claim_id"],
-      kind: String.to_existing_atom(raw["kind"] || "method"),
+      kind: safe_to_atom(raw["kind"] || "method"),
       title: raw["title"],
       content: raw["content"],
       source_type: raw["source_type"],
@@ -1944,7 +1970,7 @@ defmodule Vaos.Ledger.Epistemic.Ledger do
       fork_specificity: raw["fork_specificity"],
       optimization_readiness: raw["optimization_readiness"],
       overall_score: raw["overall_score"],
-      status: String.to_existing_atom(raw["status"] || "proposed"),
+      status: safe_to_atom(raw["status"] || "proposed"),
       materialized_claim_id: raw["materialized_claim_id"],
       created_at: raw["created_at"],
       updated_at: raw["updated_at"],
@@ -1958,7 +1984,7 @@ defmodule Vaos.Ledger.Epistemic.Ledger do
       input_id: raw["input_id"],
       hypothesis_id: raw["hypothesis_id"],
       recommended_mode: raw["recommended_mode"],
-      status: String.to_existing_atom(raw["status"] || "draft"),
+      status: safe_to_atom(raw["status"] || "draft"),
       artifact_candidates: raw["artifact_candidates"] || [],
       target_spec: raw["target_spec"] || %{},
       eval_plan: raw["eval_plan"] || %{},
@@ -2023,7 +2049,7 @@ defmodule Vaos.Ledger.Epistemic.Ledger do
       source_type: raw["source_type"],
       source_ref: raw["source_ref"],
       source_path: raw["source_path"],
-      review_status: String.to_existing_atom(raw["review_status"] || "pending"),
+      review_status: safe_to_atom(raw["review_status"] || "pending"),
       review_notes: raw["review_notes"],
       created_at: raw["created_at"],
       updated_at: raw["updated_at"],
@@ -2057,8 +2083,8 @@ defmodule Vaos.Ledger.Epistemic.Ledger do
       id: raw["id"],
       claim_id: raw["claim_id"],
       claim_title: raw["claim_title"],
-      action_type: String.to_existing_atom(raw["action_type"]),
-      executor: String.to_existing_atom(raw["executor"]),
+      action_type: safe_to_atom(raw["action_type"]),
+      executor: safe_to_atom(raw["executor"]),
       mode: raw["mode"],
       stage: raw["stage"],
       priority: raw["priority"],
@@ -2076,9 +2102,9 @@ defmodule Vaos.Ledger.Epistemic.Ledger do
       decision_id: raw["decision_id"],
       claim_id: raw["claim_id"],
       claim_title: raw["claim_title"],
-      action_type: String.to_existing_atom(raw["action_type"]),
-      executor: String.to_existing_atom(raw["executor"]),
-      status: String.to_existing_atom(raw["status"]),
+      action_type: safe_to_atom(raw["action_type"]),
+      executor: safe_to_atom(raw["executor"]),
+      status: safe_to_atom(raw["status"]),
       mode: raw["mode"],
       notes: raw["notes"],
       runtime_seconds: raw["runtime_seconds"],
