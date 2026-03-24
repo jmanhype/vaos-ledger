@@ -8,7 +8,7 @@ defmodule Vaos.Ledger.Research.Literature do
 
   @semantic_scholar_url "https://api.semanticscholar.org/graph/v1/paper/search"
   @openalex_url "https://api.openalex.org/works"
-  @ss_fields "title,authors,year,abstract,url,paperId,citationCount"
+  @ss_fields "title,authors,year,abstract,url,paperId,citationCount,publicationTypes"
 
   @type paper :: %{
           paper_id: String.t(),
@@ -34,11 +34,20 @@ defmodule Vaos.Ledger.Research.Literature do
   def search_semantic_scholar(query, http_fn, opts \\ []) do
     limit = Keyword.get(opts, :limit, 20)
     api_key = Keyword.get(opts, :api_key, nil)
+    publication_types = Keyword.get(opts, :publication_types, nil)
 
     headers = if api_key, do: [{"x-api-key", api_key}], else: []
 
+    params = [query: query, limit: limit, fields: @ss_fields]
+    params = if publication_types do
+      # SS API accepts publicationTypes filter e.g. "Review,MetaAnalysis"
+      params ++ [publicationTypes: publication_types]
+    else
+      params
+    end
+
     case http_fn.(@semantic_scholar_url,
-           params: [query: query, limit: limit, fields: @ss_fields],
+           params: params,
            headers: headers
          ) do
       {:ok, %{"data" => data}} when is_list(data) ->
@@ -66,6 +75,16 @@ defmodule Vaos.Ledger.Research.Literature do
           {:ok, [paper()]} | {:error, term()}
   def search_openalex(query, http_fn, opts \\ []) do
     limit = Keyword.get(opts, :limit, 20)
+    type_filter = Keyword.get(opts, :type, nil)
+
+    # Build filter string — always require abstract and recent date
+    base_filter = "has_abstract:true,from_publication_date:2010-01-01"
+    filter = if type_filter do
+      # OA accepts type filter e.g. "type:review"
+      "#{base_filter},type:#{type_filter}"
+    else
+      base_filter
+    end
 
     case http_fn.(@openalex_url,
            params: [
@@ -73,7 +92,7 @@ defmodule Vaos.Ledger.Research.Literature do
              {"per-page", Integer.to_string(limit)},
              {"select",
               "id,title,publication_year,cited_by_count,authorships,abstract_inverted_index"},
-             {"filter", "has_abstract:true,from_publication_date:2010-01-01"}
+             {"filter", filter}
            ]
          ) do
       {:ok, %{"results" => results}} when is_list(results) ->
@@ -143,6 +162,7 @@ defmodule Vaos.Ledger.Research.Literature do
       abstract: Map.get(paper, "abstract"),
       url: Map.get(paper, "url"),
       citation_count: Map.get(paper, "citationCount", 0) || 0,
+      publication_types: Map.get(paper, "publicationTypes") || [],
       source: :semantic_scholar
     }
   end
