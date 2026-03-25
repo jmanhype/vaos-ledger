@@ -103,12 +103,15 @@ defmodule Vaos.Ledger.Experiment.ScorerTest do
       assert score > 0.0
     end
 
-    test "fast runtime gets bonus" do
-      fast = Models.ExecutionRecord.new(status: :succeeded, runtime_seconds: 2.0)
+    test "suspiciously fast runtime gets penalty" do
+      trivial = Models.ExecutionRecord.new(status: :succeeded, runtime_seconds: 0.5)
+      moderate = Models.ExecutionRecord.new(status: :succeeded, runtime_seconds: 30.0)
       slow = Models.ExecutionRecord.new(status: :succeeded, runtime_seconds: 500.0)
-      score_fast = Scorer.estimate_score(fast, [])
+      score_trivial = Scorer.estimate_score(trivial, [])
+      score_moderate = Scorer.estimate_score(moderate, [])
       score_slow = Scorer.estimate_score(slow, [])
-      assert score_fast > score_slow
+      assert score_moderate > score_trivial, "moderate runtime should beat suspiciously fast"
+      assert score_moderate > score_slow, "moderate runtime should beat very slow"
     end
   end
 

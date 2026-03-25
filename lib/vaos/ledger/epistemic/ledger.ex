@@ -1892,6 +1892,8 @@ defmodule Vaos.Ledger.Epistemic.Ledger do
       confidence: raw["confidence"],
       source_type: raw["source_type"],
       source_ref: raw["source_ref"],
+      actor_id: raw["actor_id"],
+      trace_id: raw["trace_id"],
       artifact_paths: raw["artifact_paths"] || [],
       created_at: raw["created_at"],
       metadata: raw["metadata"] || %{}
@@ -1909,6 +1911,8 @@ defmodule Vaos.Ledger.Epistemic.Ledger do
       status: safe_to_atom(raw["status"] || "open"),
       created_at: raw["created_at"],
       resolution: raw["resolution"],
+      actor_id: raw["actor_id"],
+      trace_id: raw["trace_id"],
       metadata: raw["metadata"] || %{}
     )
   end
@@ -2225,12 +2229,19 @@ defmodule Vaos.Ledger.Epistemic.Ledger do
           claim.status
         end
 
-      # Simple beta-distribution-inspired Bayesian update
-      # Prior gets less weight as more evidence accumulates
+      # Likelihood-ratio weighted Bayesian update
+      # Prior weight decreases with total evidence strength, not count
       prior = claim.confidence || 0.5
       evidence_ratio = metrics["belief"]
-      evidence_count = metrics["evidence_count"] || 0
-      prior_weight = 1.0 / (1.0 + evidence_count)
+      evidence_weight = metrics["evidence_weight"] || 0.0
+      _evidence_count = metrics["evidence_count"] || 0
+
+      # Use evidence_weight (sum of strength*confidence) instead of raw count.
+      # This ensures weak evidence (low strength/confidence) barely moves the prior,
+      # while strong evidence shifts it proportionally.
+      # Smoothing factor k controls sensitivity: higher k = more evidence needed to override prior.
+      k = 2.0
+      prior_weight = k / (k + evidence_weight)
       posterior = prior_weight * prior + (1.0 - prior_weight) * evidence_ratio
 
       updated_claim =

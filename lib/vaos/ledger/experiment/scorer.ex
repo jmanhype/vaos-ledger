@@ -114,9 +114,10 @@ defmodule Vaos.Ledger.Experiment.Scorer do
     runtime_factor =
       cond do
         is_nil(execution_record.runtime_seconds) -> 1.0
-        execution_record.runtime_seconds < 10.0 -> 1.2
+        execution_record.runtime_seconds < 2.0 -> 0.5
+        execution_record.runtime_seconds < 10.0 -> 0.9
         execution_record.runtime_seconds < 60.0 -> 1.0
-        execution_record.runtime_seconds < 300.0 -> 0.8
+        execution_record.runtime_seconds < 300.0 -> 0.9
         true -> 0.6
       end
 

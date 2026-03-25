@@ -73,7 +73,7 @@ defmodule Vaos.Ledger.Epistemic.Models do
     @moduledoc false
     defstruct [
       :id, :claim_id, :summary, :direction, :strength, :confidence,
-      :source_type, :source_ref, :created_at,
+      :source_type, :source_ref, :actor_id, :trace_id, :created_at,
       artifact_paths: [], metadata: %{}
     ]
 
@@ -90,7 +90,7 @@ defmodule Vaos.Ledger.Epistemic.Models do
     @moduledoc false
     defstruct [
       :id, :claim_id, :description, :target_kind, :target_id,
-      :severity, :status, :created_at, :resolution, metadata: %{}
+      :severity, :status, :created_at, :resolution, :actor_id, :trace_id, metadata: %{}
     ]
 
     def new(attrs) do
