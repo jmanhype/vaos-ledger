@@ -7,6 +7,21 @@ defmodule Vaos.Ledger.Research.Pipeline do
   - llm_fn :: (prompt :: String.t() -> {:ok, String.t()} | {:error, term()})
   - http_fn :: (url :: String.t(), opts :: keyword() -> {:ok, map()} | {:error, term()})
   - code_fn :: (code :: String.t(), opts :: keyword() -> {:ok, %{stdout: String.t(), stderr: String.t()}} | {:error, term()})
+  - adversary_fn :: same signature as llm_fn, but MUST use a separate LLM instance
+    or system prompt. The adversary audits generated code for cheating.
+
+  ## Security contract for code_fn
+
+  The host application MUST execute generated code in an air-gapped sandbox:
+  - Network: no outbound connections (iptables DROP or network namespace)
+  - Filesystem: read-only root, writable only in an ephemeral work_dir
+  - No access to ledger.json, eval suites, or any pipeline state files
+  - Process: no subprocess spawning (seccomp or equivalent)
+  - Time limit: hard kill after timeout_ms (CodeExecutor handles this)
+
+  The Grounding module's `detect_cheat/3` catches obvious environment escapes
+  (import requests, os.system, etc.) at the code level, but regex is bypassable.
+  The sandbox is the last line of defense.
   """
 
   alias Vaos.Ledger.Research.{CodeExecutor, Literature, Paper}

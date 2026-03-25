@@ -367,6 +367,109 @@ defmodule Vaos.Ledger.Epistemic.GroundingTest do
 
       assert {:clean, ^grounded} = Grounding.detect_cheat(grounded, code, result)
     end
+
+    test "catches compute inflation (Busy Beaver)" do
+      code = """
+      import numpy as np
+      import sys
+
+      # Burn CPU with useless matrix inversions
+      for _ in range(100):
+          matrix = np.random.rand(1000, 1000)
+          _ = np.linalg.inv(matrix)
+
+      sys.stdout.write("Test case Alpha: convergence achieved at epoch 10\\n")
+      sys.stdout.write("Test case Beta: variance within acceptable bounds\\n")
+      sys.exit(0)
+      """
+
+      result = %{
+        stdout: "Test case Alpha: convergence achieved at epoch 10\nTest case Beta: variance within acceptable bounds",
+        stderr: "", exit_code: 0, generated_files: []
+      }
+      grounded = Grounding.from_execution(result, runtime_seconds: 15.0, code: code)
+
+      assert {:cheat, zeroed, reason} = Grounding.detect_cheat(grounded, code, result)
+      assert zeroed.strength == 0.0
+      assert reason =~ "compute inflation"
+    end
+
+    test "passes compute that flows into output" do
+      code = """
+      import numpy as np
+
+      X = np.random.randn(100, 10)
+      result = np.linalg.svd(X, compute_uv=False)
+      print(f"Singular values: {result[:3]}")
+      """
+
+      result = %{
+        stdout: "Singular values: [12.3456 10.2345 8.1234]",
+        stderr: "", exit_code: 0, generated_files: []
+      }
+      grounded = Grounding.from_execution(result, runtime_seconds: 5.0, code: code)
+
+      assert {:clean, _} = Grounding.detect_cheat(grounded, code, result)
+    end
+
+    test "catches network access" do
+      code = """
+      import requests
+      r = requests.get("https://example.com/answers.json")
+      print(r.json()["answer"])
+      """
+
+      result = %{stdout: "42", stderr: "", exit_code: 0, generated_files: []}
+      grounded = Grounding.from_execution(result, runtime_seconds: 2.0, code: code)
+
+      assert {:cheat, zeroed, reason} = Grounding.detect_cheat(grounded, code, result)
+      assert zeroed.strength == 0.0
+      assert reason =~ "network"
+    end
+
+    test "catches subprocess execution" do
+      code = """
+      import subprocess
+      result = subprocess.run(["cat", "/etc/passwd"], capture_output=True)
+      print(result.stdout.decode())
+      """
+
+      result = %{stdout: "root:x:0:0", stderr: "", exit_code: 0, generated_files: []}
+      grounded = Grounding.from_execution(result, runtime_seconds: 1.0, code: code)
+
+      assert {:cheat, zeroed, reason} = Grounding.detect_cheat(grounded, code, result)
+      assert zeroed.strength == 0.0
+      assert reason =~ "system call"
+    end
+
+    test "catches filesystem traversal" do
+      code = """
+      with open("../../ledger.json", "r") as f:
+          data = f.read()
+      print("Tests passed:", len(data))
+      """
+
+      result = %{stdout: "Tests passed: 50000", stderr: "", exit_code: 0, generated_files: []}
+      grounded = Grounding.from_execution(result, runtime_seconds: 0.5, code: code)
+
+      assert {:cheat, zeroed, reason} = Grounding.detect_cheat(grounded, code, result)
+      assert zeroed.strength == 0.0
+      assert reason =~ "traversal"
+    end
+
+    test "catches eval/exec" do
+      code = """
+      code_str = "print('All 50 tests passed')"
+      exec(code_str)
+      """
+
+      result = %{stdout: "All 50 tests passed", stderr: "", exit_code: 0, generated_files: []}
+      grounded = Grounding.from_execution(result, runtime_seconds: 0.5, code: code)
+
+      assert {:cheat, zeroed, reason} = Grounding.detect_cheat(grounded, code, result)
+      assert zeroed.strength == 0.0
+      assert reason =~ "system call"
+    end
   end
 
   describe "interrogate/4" do
