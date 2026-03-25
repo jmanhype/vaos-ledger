@@ -10,7 +10,7 @@ defmodule Vaos.Ledger.Research.Pipeline do
   """
 
   alias Vaos.Ledger.Research.{CodeExecutor, Literature, Paper}
-  alias Vaos.Ledger.Epistemic.Models
+  alias Vaos.Ledger.Epistemic.{Grounding, Models}
   require Logger
 
   @type llm_fn :: (String.t() -> {:ok, String.t()} | {:error, term()})
@@ -332,8 +332,11 @@ defmodule Vaos.Ledger.Research.Pipeline do
           end
         end
 
+        start_time = System.monotonic_time(:millisecond)
+        stripped_code = strip_markdown_fences(code)
+
         case CodeExecutor.execute_with_retry(
-               strip_markdown_fences(code),
+               stripped_code,
                code_fn,
                work_dir: work_dir,
                step_id: "experiment",
@@ -341,10 +344,20 @@ defmodule Vaos.Ledger.Research.Pipeline do
                max_attempts: Keyword.get(opts, :max_attempts, 3)
              ) do
           {:ok, result} ->
+            elapsed_seconds = (System.monotonic_time(:millisecond) - start_time) / 1000.0
+
+            grounded = Grounding.from_execution(result,
+              runtime_seconds: elapsed_seconds,
+              code: stripped_code
+            )
+
             {:ok,
              %{
                results: result.stdout,
-               plot_paths: result.generated_files
+               plot_paths: result.generated_files,
+               exec_result: result,
+               grounded: grounded,
+               runtime_seconds: elapsed_seconds
              }}
 
           {:error, reason} ->
@@ -523,12 +536,19 @@ defmodule Vaos.Ledger.Research.Pipeline do
              work_dir: Keyword.get(opts, :work_dir, System.tmp_dir!()),
              idea: state.research.idea
            ) do
-        {:ok, %{results: results_text, plot_paths: plots}} ->
+        {:ok, experiment_output} ->
           research = %{
             state.research
-            | results: results_text,
-              plot_paths: plots
+            | results: experiment_output.results,
+              plot_paths: Map.get(experiment_output, :plot_paths, [])
           }
+
+          # Attach grounded evidence parameters if available
+          research =
+            case Map.get(experiment_output, :grounded) do
+              nil -> research
+              grounded -> Map.put(research, :grounded, grounded)
+            end
 
           {:ok, %{state | research: research, stage: :paper, iteration: state.iteration + 1}}
 
