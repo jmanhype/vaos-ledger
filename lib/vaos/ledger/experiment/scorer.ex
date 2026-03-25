@@ -8,7 +8,7 @@ defmodule Vaos.Ledger.Experiment.Scorer do
 
   alias Vaos.Ledger.Epistemic.Models
 
-  @type score_option :: {:fast, boolean()} | {:use_cache, boolean()} | {:llm_fn, (String.t() -> {:ok, String.t()} | {:error, term()})}
+  @type score_option :: {:fast, boolean()} | {:use_cache, boolean()} | {:llm_fn, (String.t() -> {:ok, String.t()} | {:error, term()})} | {:validate_fn, (map(), float() -> float())}
   @type score_result :: {:cached | :computed, float()}
 
   @doc """
@@ -23,28 +23,45 @@ defmodule Vaos.Ledger.Experiment.Scorer do
     * `:use_cache` — consult in-memory cache (default `true`)
     * `:llm_fn` — optional callback `(String.t() -> {:ok, String.t()} | {:error, term()})`.
       If provided, uses the LLM to score the result. Falls back to estimation on failure.
+    * `:validate_fn` — optional adversarial callback `(result, score -> adjusted_score)`.
+      Called after scoring to allow an independent validator to adjust or veto the score.
+      The validator receives the full result map and the computed score, and returns
+      an adjusted score. Use this to inject adversarial red-teaming: a separate LLM
+      prompted to find flaws in the result and penalize trivial or tautological outputs.
   """
   @spec score_result(map(), list(score_option())) :: score_result()
   def score_result(result, opts \\ []) do
     fast = Keyword.get(opts, :fast, true)
     use_cache = Keyword.get(opts, :use_cache, true)
+    validate_fn = Keyword.get(opts, :validate_fn)
 
-    if fast and use_cache do
-      init_cache()
-      cache_key = cache_key(result)
+    {status, raw_score} =
+      if fast and use_cache do
+        init_cache()
+        cache_key = cache_key(result)
 
-      case get_from_cache(cache_key) do
-        {:ok, score} ->
-          {:cached, score}
+        case get_from_cache(cache_key) do
+          {:ok, score} ->
+            {:cached, score}
 
-        :miss ->
-          score = compute_score(result, opts)
-          put_in_cache(cache_key, score)
-          {:computed, score}
+          :miss ->
+            score = compute_score(result, opts)
+            put_in_cache(cache_key, score)
+            {:computed, score}
+        end
+      else
+        {:computed, compute_score(result, opts)}
       end
-    else
-      {:computed, compute_score(result, opts)}
-    end
+
+    # Apply adversarial validation if provided
+    final_score =
+      if validate_fn do
+        Models.clamp(validate_fn.(result, raw_score))
+      else
+        raw_score
+      end
+
+    {status, final_score}
   end
 
   @doc """

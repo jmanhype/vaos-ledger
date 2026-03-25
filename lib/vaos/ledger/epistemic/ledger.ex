@@ -543,15 +543,30 @@ defmodule Vaos.Ledger.Epistemic.Ledger do
 
     case fetch_claim(state, claim_id) do
       {:ok, _claim} ->
+        source_type = Keyword.get(attrs, :source_type, "manual")
+        caller_confidence = Keyword.get(attrs, :confidence)
+
+        # Compute confidence from source_type. Caller-supplied confidence is
+        # capped at the source_type ceiling to prevent self-grading.
+        computed_confidence = confidence_ceiling_for_source(source_type)
+        confidence =
+          if caller_confidence do
+            min(caller_confidence, computed_confidence)
+          else
+            computed_confidence
+          end
+
         evidence =
           Models.Evidence.new(
           claim_id: claim_id,
           summary: Keyword.fetch!(attrs, :summary),
           direction: Keyword.get(attrs, :direction, :inconclusive),
           strength: Keyword.get(attrs, :strength, 0.5),
-          confidence: Keyword.get(attrs, :confidence, 0.5),
-          source_type: Keyword.get(attrs, :source_type, "manual"),
+          confidence: confidence,
+          source_type: source_type,
           source_ref: Keyword.get(attrs, :source_ref, ""),
+          actor_id: Keyword.get(attrs, :actor_id),
+          trace_id: Keyword.get(attrs, :trace_id),
           artifact_paths: Keyword.get(attrs, :artifact_paths, []),
           metadata: Keyword.get(attrs, :metadata, %{}),
           id: Keyword.get(attrs, :id)
@@ -2574,6 +2589,18 @@ defmodule Vaos.Ledger.Epistemic.Ledger do
         :proposed
     end
   end
+
+  # Confidence ceiling by evidence source type.
+  # Prevents LLM-generated evidence from self-assigning high confidence.
+  # Empirically-grounded sources (code execution, published papers) get higher ceilings.
+  defp confidence_ceiling_for_source("code_execution"), do: 0.9
+  defp confidence_ceiling_for_source("paper"), do: 0.85
+  defp confidence_ceiling_for_source("experiment"), do: 0.85
+  defp confidence_ceiling_for_source("manual"), do: 0.8
+  defp confidence_ceiling_for_source("llm"), do: 0.5
+  defp confidence_ceiling_for_source("llm_analysis"), do: 0.5
+  defp confidence_ceiling_for_source("heuristic"), do: 0.4
+  defp confidence_ceiling_for_source(_unknown), do: 0.5
 
   # Helper functions for fetching entities
   defp fetch_claim(state, claim_id) do

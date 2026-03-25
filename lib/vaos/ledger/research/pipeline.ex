@@ -17,11 +17,14 @@ defmodule Vaos.Ledger.Research.Pipeline do
   @type http_fn :: (String.t(), keyword() -> {:ok, map()} | {:error, term()})
   @type code_fn :: (String.t(), keyword() -> {:ok, %{stdout: String.t(), stderr: String.t()}} | {:error, term()})
 
+  @type validate_fn :: (map(), float() -> float())
+
   @type pipeline_opts :: [
           {:ledger, pid()},
           {:llm_fn, llm_fn()},
           {:http_fn, http_fn()},
           {:code_fn, code_fn()},
+          {:validate_fn, validate_fn()},
           {:max_iterations, pos_integer()},
           {:target_score, float()},
           {:work_dir, String.t()}
@@ -64,6 +67,7 @@ defmodule Vaos.Ledger.Research.Pipeline do
   Optional opts:
     - :http_fn - callback for HTTP requests (needed for literature search)
     - :code_fn - callback for code execution (needed for experiments)
+    - :validate_fn - adversarial callback (result, score -> adjusted_score) for red-teaming scores
     - :max_iterations - max pipeline iterations (default: 10)
     - :target_score - score threshold to stop early (default: 0.8)
     - :work_dir - directory for experiment artifacts
