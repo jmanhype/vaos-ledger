@@ -8,7 +8,7 @@ defmodule Vaos.Ledger.Research.Literature do
 
   @semantic_scholar_url "https://api.semanticscholar.org/graph/v1/paper/search"
   @openalex_url "https://api.openalex.org/works"
-  @ss_fields "title,authors,year,abstract,url,paperId,citationCount,publicationTypes"
+  @ss_fields "title,authors,year,abstract,url,paperId,citationCount,publicationTypes,externalIds"
 
   @type paper :: %{
           paper_id: String.t(),
@@ -18,6 +18,7 @@ defmodule Vaos.Ledger.Research.Literature do
           abstract: String.t() | nil,
           url: String.t() | nil,
           citation_count: integer(),
+          doi: String.t() | nil,
           source: :semantic_scholar | :openalex
         }
 
@@ -91,7 +92,7 @@ defmodule Vaos.Ledger.Research.Literature do
              {"search", query},
              {"per-page", Integer.to_string(limit)},
              {"select",
-              "id,title,publication_year,cited_by_count,authorships,abstract_inverted_index"},
+              "id,doi,title,publication_year,cited_by_count,authorships,abstract_inverted_index"},
              {"filter", filter}
            ]
          ) do
@@ -163,8 +164,16 @@ defmodule Vaos.Ledger.Research.Literature do
       url: Map.get(paper, "url"),
       citation_count: Map.get(paper, "citationCount", 0) || 0,
       publication_types: Map.get(paper, "publicationTypes") || [],
+      doi: extract_doi(paper),
       source: :semantic_scholar
     }
+  end
+
+  defp extract_doi(paper) do
+    case Map.get(paper, "externalIds") do
+      %{"DOI" => doi} when is_binary(doi) and doi != "" -> doi
+      _ -> nil
+    end
   end
 
   defp normalize_openalex_work(work) do
@@ -182,8 +191,17 @@ defmodule Vaos.Ledger.Research.Literature do
       abstract: reconstruct_abstract(Map.get(work, "abstract_inverted_index")),
       url: Map.get(work, "id"),
       citation_count: Map.get(work, "cited_by_count", 0) || 0,
+      doi: extract_openalex_doi(work),
       source: :openalex
     }
+  end
+
+  defp extract_openalex_doi(work) do
+    case Map.get(work, "doi") do
+      "https://doi.org/" <> doi -> doi
+      doi when is_binary(doi) and doi != "" -> doi
+      _ -> nil
+    end
   end
 
   defp reconstruct_abstract(nil), do: nil
