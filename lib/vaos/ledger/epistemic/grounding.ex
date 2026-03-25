@@ -188,6 +188,21 @@ defmodule Vaos.Ledger.Epistemic.Grounding do
   `{:cheat, grounded_zeroed, reason}`.
 
   Call this before `interrogate/4` as a cheap first-pass filter.
+
+  ## Security boundary (READ THIS)
+
+  This is a **probabilistic filter**, not a security guarantee. It catches
+  naive/lazy cheats (sleep(), verbatim print, import requests). It is trivially
+  bypassable via dynamic evaluation (`__import__(base64.b64decode(...))`) or
+  any other Python metaprogramming technique. Rice's Theorem guarantees that
+  no static analysis of a Turing-complete language can determine its runtime
+  behavior.
+
+  The actual security boundaries are:
+  1. Layer 5 (`interrogate/4`) — adversarial LLM semantic analysis
+  2. The OS sandbox — network isolation, read-only filesystem, seccomp
+
+  Do NOT add more regex patterns to chase obfuscation. That is WAF whack-a-mole.
   """
   @spec detect_cheat(grounded(), String.t(), exec_result()) ::
           {:clean, grounded()} | {:cheat, grounded(), String.t()}

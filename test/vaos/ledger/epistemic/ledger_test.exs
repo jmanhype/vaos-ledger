@@ -423,6 +423,40 @@ defmodule Vaos.Ledger.Epistemic.LedgerTest do
       assert metrics["belief"] == 0.0
       assert metrics["uncertainty"] == 1.0
     end
+
+    test "old evidence has lower effective weight than fresh evidence" do
+      claim = Ledger.add_claim(title: "Decay test", statement: "S")
+
+      # Add evidence with a backdated created_at (2 years ago)
+      two_years_ago = DateTime.utc_now() |> DateTime.add(-730, :day) |> DateTime.to_iso8601()
+      old_evidence = Ledger.add_evidence(
+        claim_id: claim.id, summary: "Old finding", direction: :support,
+        strength: 0.8, confidence: 0.8
+      )
+      # Manually backdate via GenServer state (evidence is immutable through API)
+      :sys.replace_state(Ledger, fn state ->
+        e = Map.get(state.evidence, old_evidence.id)
+        updated_e = %{e | created_at: two_years_ago}
+        put_in(state, [:evidence, old_evidence.id], updated_e)
+      end)
+
+      metrics_old_only = Ledger.claim_metrics(claim.id)
+      old_support = metrics_old_only["support_score"]
+
+      # Add fresh evidence with same strength/confidence
+      Ledger.add_evidence(
+        claim_id: claim.id, summary: "Fresh finding", direction: :support,
+        strength: 0.8, confidence: 0.8
+      )
+
+      metrics_both = Ledger.claim_metrics(claim.id)
+      fresh_contribution = metrics_both["support_score"] - old_support
+
+      # Fresh evidence should contribute more than 2-year-old evidence
+      # 2-year-old evidence decayed by 2^(-730/365) = 2^(-2) = 0.25
+      assert fresh_contribution > old_support,
+        "fresh evidence (#{fresh_contribution}) should outweigh 2-year-old evidence (#{old_support})"
+    end
   end
 
   describe "refresh_all/0" do

@@ -2352,19 +2352,19 @@ defmodule Vaos.Ledger.Epistemic.Ledger do
       support_score =
         evidence
         |> Enum.filter(&(&1.direction == :support))
-        |> Enum.map(&(&1.strength * &1.confidence))
+        |> Enum.map(&evidence_effective_weight/1)
         |> Enum.sum()
 
       contradict_score =
         evidence
         |> Enum.filter(&(&1.direction == :contradict))
-        |> Enum.map(&(&1.strength * &1.confidence))
+        |> Enum.map(&evidence_effective_weight/1)
         |> Enum.sum()
 
       inconclusive_score =
         evidence
         |> Enum.filter(&(&1.direction == :inconclusive))
-        |> Enum.map(&(&1.strength * &1.confidence))
+        |> Enum.map(&evidence_effective_weight/1)
         |> Enum.sum()
 
       evidence_weight = support_score + contradict_score + inconclusive_score
@@ -2601,6 +2601,36 @@ defmodule Vaos.Ledger.Epistemic.Ledger do
   defp confidence_ceiling_for_source("llm_analysis"), do: 0.5
   defp confidence_ceiling_for_source("heuristic"), do: 0.4
   defp confidence_ceiling_for_source(_unknown), do: 0.5
+
+  # Evidence temporal decay.
+  # Unreproduced evidence loses epistemic weight over time.
+  # Half-life: 365 days. After 1 year, evidence is worth half its original weight.
+  # After 2 years, 25%. This forces the system to continually seek fresh evidence
+  # rather than resting on stale claims.
+  #
+  # Formula: weight = strength * confidence * 2^(-age_days / half_life_days)
+  @evidence_half_life_days 365.0
+
+  defp evidence_effective_weight(evidence) do
+    base_weight = (evidence.strength || 0.5) * (evidence.confidence || 0.5)
+    age_days = evidence_age_days(evidence.created_at)
+    decay = :math.pow(2.0, -age_days / @evidence_half_life_days)
+    base_weight * decay
+  end
+
+  defp evidence_age_days(nil), do: 0.0
+  defp evidence_age_days(created_at) when is_binary(created_at) do
+    case DateTime.from_iso8601(created_at) do
+      {:ok, dt, _offset} ->
+        now = DateTime.utc_now()
+        diff_seconds = DateTime.diff(now, dt, :second)
+        max(0.0, diff_seconds / 86_400.0)
+
+      {:error, _} ->
+        0.0
+    end
+  end
+  defp evidence_age_days(_), do: 0.0
 
   # Helper functions for fetching entities
   defp fetch_claim(state, claim_id) do
