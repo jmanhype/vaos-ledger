@@ -19,12 +19,15 @@ defmodule Vaos.Ledger.Research.Pipeline do
 
   @type validate_fn :: (map(), float() -> float())
 
+  @type adversary_fn :: (String.t() -> {:ok, String.t()} | {:error, term()})
+
   @type pipeline_opts :: [
           {:ledger, pid()},
           {:llm_fn, llm_fn()},
           {:http_fn, http_fn()},
           {:code_fn, code_fn()},
           {:validate_fn, validate_fn()},
+          {:adversary_fn, adversary_fn()},
           {:max_iterations, pos_integer()},
           {:target_score, float()},
           {:work_dir, String.t()}
@@ -350,6 +353,24 @@ defmodule Vaos.Ledger.Research.Pipeline do
               runtime_seconds: elapsed_seconds,
               code: stripped_code
             )
+
+            # Layer 1: Deterministic cheat detection (free, no LLM)
+            grounded =
+              case Grounding.detect_cheat(grounded, stripped_code, result) do
+                {:cheat, zeroed, reason} ->
+                  Logger.warning("Deterministic cheat detected: #{reason}")
+                  zeroed
+
+                {:clean, g} ->
+                  # Layer 2: Adversarial LLM interrogation (if provided)
+                  adversary_fn = Keyword.get(opts, :adversary_fn)
+
+                  if adversary_fn do
+                    Grounding.interrogate(g, stripped_code, result, adversary_fn)
+                  else
+                    g
+                  end
+              end
 
             {:ok,
              %{

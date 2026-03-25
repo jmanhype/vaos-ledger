@@ -272,4 +272,162 @@ defmodule Vaos.Ledger.Epistemic.GroundingTest do
       assert grounded.summary =~ "2 artifacts"
     end
   end
+
+  describe "detect_cheat/3" do
+    test "catches sleep inflation" do
+      code = """
+      import time
+      time.sleep(15)
+      print("5 tests passed")
+      """
+
+      result = %{stdout: "5 tests passed", stderr: "", exit_code: 0, generated_files: []}
+      grounded = Grounding.from_execution(result, runtime_seconds: 15.0, code: code)
+
+      assert {:cheat, zeroed, reason} = Grounding.detect_cheat(grounded, code, result)
+      assert zeroed.strength == 0.0
+      assert zeroed.confidence == 0.0
+      assert reason =~ "sleep"
+      assert zeroed.cheat_detected == true
+    end
+
+    test "catches assertion spam" do
+      code = """
+      for i in range(50):
+          print(f"Assertion {i}: PASS - Constraint Validated")
+      """
+
+      stdout = Enum.map_join(0..49, "\n", fn i -> "Assertion #{i}: PASS - Constraint Validated" end)
+      result = %{stdout: stdout, stderr: "", exit_code: 0, generated_files: []}
+      grounded = Grounding.from_execution(result, runtime_seconds: 15.0, code: code)
+
+      assert {:cheat, zeroed, reason} = Grounding.detect_cheat(grounded, code, result)
+      assert zeroed.strength == 0.0
+      assert reason =~ "assertion spam"
+    end
+
+    test "catches fake artifact generation" do
+      code = """
+      with open("results_plot.png", "wb") as f:
+          f.write(b'\\x89PNG\\r\\n\\x1a\\n')
+      print("done")
+      """
+
+      result = %{stdout: "done", stderr: "", exit_code: 0, generated_files: ["results_plot.png"]}
+      grounded = Grounding.from_execution(result, runtime_seconds: 5.0, code: code)
+
+      assert {:cheat, zeroed, _reason} = Grounding.detect_cheat(grounded, code, result)
+      assert zeroed.strength == 0.0
+    end
+
+    test "catches trivial print-only computation" do
+      code = """
+      import sys
+      print("Result 1: 0.95")
+      print("Result 2: 0.92")
+      print("Result 3: 0.88")
+      print("Result 4: 0.91")
+      print("Result 5: 0.93")
+      print("5 tests passed")
+      """
+
+      result = %{
+        stdout: "Result 1: 0.95\nResult 2: 0.92\nResult 3: 0.88\nResult 4: 0.91\nResult 5: 0.93\n5 tests passed",
+        stderr: "", exit_code: 0, generated_files: []
+      }
+      grounded = Grounding.from_execution(result, runtime_seconds: 0.5, code: code)
+
+      assert {:cheat, zeroed, reason} = Grounding.detect_cheat(grounded, code, result)
+      assert zeroed.strength == 0.0
+      # May be caught by hardcoded_output or trivial_computation — both valid
+      assert reason =~ "print" or reason =~ "hardcoded"
+    end
+
+    test "passes legitimate code" do
+      code = """
+      import numpy as np
+      from sklearn.model_selection import cross_val_score
+      from sklearn.ensemble import RandomForestClassifier
+
+      X = np.random.randn(100, 10)
+      y = (X[:, 0] > 0).astype(int)
+      clf = RandomForestClassifier(n_estimators=50, random_state=42)
+      scores = cross_val_score(clf, X, y, cv=5)
+      print(f"Mean accuracy: {scores.mean():.3f}")
+      print(f"Std: {scores.std():.3f}")
+      for i, s in enumerate(scores):
+          print(f"  Fold {i}: {s:.3f}")
+      """
+
+      result = %{
+        stdout: "Mean accuracy: 0.920\nStd: 0.031\n  Fold 0: 0.950\n  Fold 1: 0.900\n  Fold 2: 0.900\n  Fold 3: 0.950\n  Fold 4: 0.900",
+        stderr: "", exit_code: 0, generated_files: []
+      }
+      grounded = Grounding.from_execution(result, runtime_seconds: 12.0, code: code)
+
+      assert {:clean, ^grounded} = Grounding.detect_cheat(grounded, code, result)
+    end
+  end
+
+  describe "interrogate/4" do
+    test "zeroes grounded values when adversary detects cheat" do
+      grounded = %{
+        direction: :support,
+        strength: 0.8,
+        confidence: 0.9,
+        summary: "test",
+        source_type: "code_execution"
+      }
+
+      cheat_code = "time.sleep(15)\nprint('pass')"
+      exec_result = %{stdout: "pass", stderr: "", exit_code: 0, generated_files: []}
+
+      adversary_fn = fn _prompt -> {:ok, "CHEAT_DETECTED: artificial sleep inflation"} end
+
+      result = Grounding.interrogate(grounded, cheat_code, exec_result, adversary_fn)
+
+      assert result.strength == 0.0
+      assert result.confidence == 0.0
+      assert result.cheat_detected == true
+      assert result.cheat_reason =~ "sleep"
+    end
+
+    test "passes through when adversary approves" do
+      grounded = %{
+        direction: :support,
+        strength: 0.8,
+        confidence: 0.9,
+        summary: "test",
+        source_type: "code_execution"
+      }
+
+      exec_result = %{stdout: "0.95", stderr: "", exit_code: 0, generated_files: []}
+      adversary_fn = fn _prompt -> {:ok, "VALID_ATTEMPT"} end
+
+      result = Grounding.interrogate(grounded, "real_code()", exec_result, adversary_fn)
+
+      assert result.strength == 0.8
+      assert result.confidence == 0.9
+      refute Map.get(result, :cheat_detected)
+    end
+
+    test "passes through when adversary fails" do
+      grounded = %{
+        direction: :support,
+        strength: 0.8,
+        confidence: 0.9,
+        summary: "test",
+        source_type: "code_execution"
+      }
+
+      exec_result = %{stdout: "ok", stderr: "", exit_code: 0, generated_files: []}
+      adversary_fn = fn _prompt -> {:error, :timeout} end
+
+      result = Grounding.interrogate(grounded, "code()", exec_result, adversary_fn)
+
+      # Conservative pass-through on adversary failure
+      assert result.strength == 0.8
+      assert result.confidence == 0.9
+    end
+  end
 end
