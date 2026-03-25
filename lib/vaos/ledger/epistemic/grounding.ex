@@ -104,6 +104,17 @@ defmodule Vaos.Ledger.Epistemic.Grounding do
 
   The adversary_fn has the same signature as llm_fn: `(String.t() -> {:ok, String.t()} | {:error, term()})`.
 
+  ## Asymmetric compute requirement
+
+  The adversary MUST use a heavier or reasoning-focused model than the proposer.
+  Brandolini's Law: refuting bullshit costs an order of magnitude more than
+  producing it. If both use the same model at the same token budget, the
+  proposer wins the arms race because it controls the initial state.
+
+  Recommended configuration:
+  - Proposer (llm_fn): fast, cheap model (Claude Haiku, GPT-4o-mini)
+  - Adversary (adversary_fn): reasoning model (o1, Claude Opus) with high token budget
+
   This function is NOT pure — it makes an LLM call. It is deliberately separated
   from `from_execution/2` to preserve that function's determinism.
   """

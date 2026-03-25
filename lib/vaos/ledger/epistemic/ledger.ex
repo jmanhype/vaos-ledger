@@ -2349,22 +2349,25 @@ defmodule Vaos.Ledger.Epistemic.Ledger do
       autoresearch_series = Map.get(autoresearch_meta, "series", %{})
       autoresearch_aggregate = Map.get(autoresearch_meta, "aggregate_series", %{})
 
+      half_life = half_life_for_claim(claim)
+      weight_fn = &evidence_effective_weight(&1, half_life)
+
       support_score =
         evidence
         |> Enum.filter(&(&1.direction == :support))
-        |> Enum.map(&evidence_effective_weight/1)
+        |> Enum.map(weight_fn)
         |> Enum.sum()
 
       contradict_score =
         evidence
         |> Enum.filter(&(&1.direction == :contradict))
-        |> Enum.map(&evidence_effective_weight/1)
+        |> Enum.map(weight_fn)
         |> Enum.sum()
 
       inconclusive_score =
         evidence
         |> Enum.filter(&(&1.direction == :inconclusive))
-        |> Enum.map(&evidence_effective_weight/1)
+        |> Enum.map(weight_fn)
         |> Enum.sum()
 
       evidence_weight = support_score + contradict_score + inconclusive_score
@@ -2604,18 +2607,42 @@ defmodule Vaos.Ledger.Epistemic.Ledger do
 
   # Evidence temporal decay.
   # Unreproduced evidence loses epistemic weight over time.
-  # Half-life: 365 days. After 1 year, evidence is worth half its original weight.
-  # After 2 years, 25%. This forces the system to continually seek fresh evidence
-  # rather than resting on stale claims.
+  # Default half-life: 365 days. After 1 year, evidence is worth half its original weight.
+  # After 2 years, 25%. This forces the system to seek fresh evidence.
   #
-  # Formula: weight = strength * confidence * 2^(-age_days / half_life_days)
-  @evidence_half_life_days 365.0
+  # Domain-specific half-lives:
+  # - formal_math, mathematics, logic, proof: :infinity (proofs don't decay)
+  # - ml_research, software, benchmark: 180 days (fast-moving fields)
+  # - Default: 365 days
+  #
+  # Set via claim metadata: %{"domain" => "formal_math"}
+  @default_half_life_days 365.0
 
-  defp evidence_effective_weight(evidence) do
+  defp half_life_for_claim(claim) do
+    domain = get_in(claim, [Access.key(:metadata, %{}), "domain"]) ||
+             get_in(claim, [Access.key(:metadata, %{}), :domain])
+
+    case domain do
+      d when d in ["formal_math", "mathematics", "logic", "proof", "theorem"] ->
+        :infinity
+      d when d in ["ml_research", "software", "benchmark", "framework"] ->
+        180.0
+      _ ->
+        @default_half_life_days
+    end
+  end
+
+  defp evidence_effective_weight(evidence, half_life) do
     base_weight = (evidence.strength || 0.5) * (evidence.confidence || 0.5)
-    age_days = evidence_age_days(evidence.created_at)
-    decay = :math.pow(2.0, -age_days / @evidence_half_life_days)
-    base_weight * decay
+
+    case half_life do
+      :infinity ->
+        base_weight
+      days when is_number(days) ->
+        age_days = evidence_age_days(evidence.created_at)
+        decay = :math.pow(2.0, -age_days / days)
+        base_weight * decay
+    end
   end
 
   defp evidence_age_days(nil), do: 0.0

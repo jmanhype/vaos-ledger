@@ -457,6 +457,63 @@ defmodule Vaos.Ledger.Epistemic.LedgerTest do
       assert fresh_contribution > old_support,
         "fresh evidence (#{fresh_contribution}) should outweigh 2-year-old evidence (#{old_support})"
     end
+
+    test "formal_math claims bypass temporal decay" do
+      # Mathematical proofs don't decay — a valid proof from 5 years ago is still valid
+      claim = Ledger.add_claim(
+        title: "Fermat's Last Theorem",
+        statement: "No three positive integers satisfy a^n + b^n = c^n for n > 2",
+        metadata: %{"domain" => "formal_math"}
+      )
+
+      evidence = Ledger.add_evidence(
+        claim_id: claim.id, summary: "Wiles 1995 proof",
+        direction: :support, strength: 0.9, confidence: 0.9
+      )
+
+      # Backdate evidence to 5 years ago
+      five_years_ago = DateTime.utc_now() |> DateTime.add(-1825, :day) |> DateTime.to_iso8601()
+      :sys.replace_state(Ledger, fn state ->
+        e = Map.get(state.evidence, evidence.id)
+        put_in(state, [:evidence, evidence.id], %{e | created_at: five_years_ago})
+      end)
+
+      metrics = Ledger.claim_metrics(claim.id)
+
+      # For formal_math, 5-year-old evidence should retain full weight
+      # confidence ceiling caps at 0.8 (manual source), so max weight = 0.9 * 0.8 = 0.72
+      # Without decay bypass, weight would be 0.72 * 2^(-1825/365) = 0.72 * 0.03 ≈ 0.02
+      assert metrics["support_score"] > 0.5,
+        "formal_math evidence should not decay (got #{metrics["support_score"]})"
+    end
+
+    test "ml_research claims decay faster (180-day half-life)" do
+      claim = Ledger.add_claim(
+        title: "BERT outperforms baselines",
+        statement: "BERT achieves SOTA on GLUE",
+        metadata: %{"domain" => "ml_research"}
+      )
+
+      evidence = Ledger.add_evidence(
+        claim_id: claim.id, summary: "Benchmark result",
+        direction: :support, strength: 0.8, confidence: 0.8
+      )
+
+      # Backdate to 1 year ago
+      one_year_ago = DateTime.utc_now() |> DateTime.add(-365, :day) |> DateTime.to_iso8601()
+      :sys.replace_state(Ledger, fn state ->
+        e = Map.get(state.evidence, evidence.id)
+        put_in(state, [:evidence, evidence.id], %{e | created_at: one_year_ago})
+      end)
+
+      metrics = Ledger.claim_metrics(claim.id)
+
+      # ml_research half-life = 180 days, so 365 days = ~2 half-lives
+      # Decay: 2^(-365/180) ≈ 0.24. Max weight = 0.8 * 0.8 = 0.64
+      # Expected: 0.64 * 0.24 ≈ 0.15
+      assert metrics["support_score"] < 0.3,
+        "ml_research evidence should decay fast (got #{metrics["support_score"]})"
+    end
   end
 
   describe "refresh_all/0" do
